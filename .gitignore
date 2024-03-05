@@ -1,0 +1,7 @@
+env
+.env
+spider_files
+Final_Queries.csv
+__pycache__
+resultados
+ignorar
