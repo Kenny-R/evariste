@@ -1,0 +1,4 @@
+{
+    "miniconsultas_status": ["En Espera", "Ejecutando", "Finalizado"],
+    "miniconsultas_operaciones": ["except", "intersect", "union"]
+}
