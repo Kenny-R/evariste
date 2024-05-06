@@ -43,7 +43,7 @@ def extract_pages_info(filename):
         filename (string): Path of the CSV with countries and pages
 
     Returns:
-        _type_: _description_
+        dictionary: Dictionary with countries as keys and information as value
     """
     countries = pd.read_csv(filename, sep=';')
     countries_dic = countries.set_index(countries.columns[0])[countries.columns[1]].to_dict()
@@ -53,9 +53,6 @@ def extract_pages_info(filename):
         url = countries_dic[country]  
         html = extract_html(url)
 
-        if html is not None:
-            countries_info[country] = extract_text(html)
-        else:
-            print(f"Could not get the HTML of the page {url}.")
+        countries_info[country] = extract_text(html) if html is not None else f"Could not get the HTML of the page {url}."
 
     return countries_info
