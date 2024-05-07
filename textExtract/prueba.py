@@ -1,8 +1,8 @@
 import requests
 import pandas as pd
-from bs4 import BeautifulSoup
+from lxml import html
 
-tags = ['title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a','span', 'li', 'td', 'th', 'label']
+tags = ['title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a','span', 'label', 'li']
 
 def extract_html(url):
     """Extracts html code from a page
@@ -20,7 +20,7 @@ def extract_html(url):
     
     return None
 
-def extract_text(html):
+def extract_text(html_str):
     """Extracts text contents from a html code
 
     Args:
@@ -29,13 +29,30 @@ def extract_text(html):
     Returns:
         list: List of text contents
     """
-    soup = BeautifulSoup(html, 'html.parser')
+    root = html.fromstring(html_str)
 
-    p_tags = soup.find(id='bodyContent').find_all(tags)
-    p_contents = [tag.text for tag in p_tags if tag.parent.name not in tags]
+    content = []
+    stack = [root.xpath('//div[@id="bodyContent"]')[0]]
+    
+    while stack:
+        node = stack.pop()
+        if node.tag == 'tr' or node.tag == 'td' or node.tag == 'th' or node.tag == 'tbody':
+            continue
+        if node.tag in tags:
+            if node.tag in ['h1','h2','h3','h4','h5','h6']:
+                content.append('\n')
+                content.append(node.text_content())
+                content.append('\n')
+            else: 
+                content.append(node.text_content())
 
-    return p_contents
+            continue
 
+        stack.extend(reversed(node))
+    
+    return content
+
+    
 def extract_pages_info(filename):
     """Extracts information from a page
 
