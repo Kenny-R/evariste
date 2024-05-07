@@ -2,9 +2,9 @@ import requests
 import pandas as pd
 from lxml import html
 
-tags = ['title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a','span', 'label', 'li']
+TAGS = ['title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a','span', 'label', 'li']
 
-def extract_html(url):
+def extract_html(url: str) -> str | None:
     """Extracts html code from a page
 
     Args:
@@ -20,11 +20,14 @@ def extract_html(url):
     
     return None
 
-def extract_text(html_str):
+def extract_text(html_str: str, content_xpath: str) -> list[str]:
     """Extracts text contents from a html code
 
     Args:
         html (string): Html code
+        
+        content_xpath: A string with the xpath to the content main
+                       label
 
     Returns:
         list: List of text contents
@@ -32,13 +35,13 @@ def extract_text(html_str):
     root = html.fromstring(html_str)
 
     content = []
-    stack = [root.xpath('//div[@id="bodyContent"]')[0]]
+    stack = [root.xpath(content_xpath)[0]]
     
     while stack:
         node = stack.pop()
         if node.tag == 'tr' or node.tag == 'td' or node.tag == 'th' or node.tag == 'tbody':
             continue
-        if node.tag in tags:
+        if node.tag in TAGS:
             if node.tag in ['h1','h2','h3','h4','h5','h6']:
                 content.append('\n')
                 content.append(node.text_content())
@@ -53,11 +56,15 @@ def extract_text(html_str):
     return content
 
     
-def extract_pages_info(filename):
+def extract_pages_info(filename: str, 
+                       content_xpath:str = '//div[@id="bodyContent"]') -> dict[str, str]:
     """Extracts information from a page
 
     Args:
         filename (string): Path of the CSV with countries and pages
+
+        content_xpath: A string with the xpath to the content main
+                       label
 
     Returns:
         dictionary: Dictionary with countries as keys and information as value
@@ -70,6 +77,6 @@ def extract_pages_info(filename):
         url = countries_dic[country]  
         html = extract_html(url)
 
-        countries_info[country] = extract_text(html) if html is not None else f"Could not get the HTML of the page {url}."
+        countries_info[country] = extract_text(html, content_xpath) if html is not None else f"Could not get the HTML of the page {url}."
 
     return countries_info
