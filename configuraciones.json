@@ -1,4 +1,5 @@
 {
     "miniconsultas_status": ["En Espera", "Ejecutando", "Finalizado"],
-    "miniconsultas_operaciones": ["except", "intersect", "union"]
+    "miniconsultas_operaciones": ["except", "intersect", "union"],
+    "miniconsultas_funciones_agregacion": ["avg", "count", "max", "min", "sum"]
 }
