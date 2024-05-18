@@ -5,3 +5,4 @@ Final_Queries.csv
 __pycache__
 resultados
 ignorar
+*.log
