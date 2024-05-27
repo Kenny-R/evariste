@@ -7,8 +7,8 @@ configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
 def main():
-    # prueba_singular()
-    hacer_pruebas_en_lote()
+    prueba_singular()
+    # hacer_pruebas_en_lote()
 
 def prueba_singular():
 
@@ -47,12 +47,12 @@ def prueba_singular():
                     #     );
     #                 """
 
-    consulta_sql = """
-                    select t1.a
-                    from nose as t1
-                    join hola as t2 on t1.c = t2.a
-                    where t1.b = 'x'
-                """
+    # consulta_sql = """
+    #                 select t1.a
+    #                 from nose as t1
+    #                 join hola as t2 on t1.c = t2.a
+    #                 where t1.b = 'x'
+    #             """
 
     # consulta_sql = """
     #                 SELECT SUM(T2.Name)
@@ -73,23 +73,10 @@ def prueba_singular():
     #                 )
     #                """
 
-    # print(parse_one(consulta_sql).sql)
-    # aliases, tablas_alias = obtener_tablas(parse_one(consulta_sql, dialect='postgres'))
-
-    # print(obtener_proyecciones(parse_one(consulta_sql, dialect='postgres'),aliases, tablas_alias))
-
-    # print(obtener_condiciones(parse_one(consulta_sql, dialect='postgres'),aliases, tablas_alias))
-
-    # condiciones = obtener_condiciones(parse_one(consulta_sql, dialect='postgres'))
-    # condiciones_por_tablas = clasificar_condiciones_where(condiciones, aliases, tablas_alias)
-    # print(condiciones_por_tablas)
-
-    # print(obtener_proyecciones_joins(parse_one(consulta_sql, dialect='postgres'),aliases, tablas_alias))
-
-    # print(obtener_miniconsultas(consulta_sql))
-
-    print(obtener_lista_miniconsultas(consulta_sql))
-
+    consulta_sql = '''SELECT sum(T1.SurfaceArea) FROM country as T1 WHERE (T1.Continent = "Asia" OR T1.Continent = "Europe") and T1.pgb = 1000'''
+    
+    print(obtener_ejecutor(consulta_sql))
+    
 def hacer_pruebas_en_lote():
     import pandas as pd
 

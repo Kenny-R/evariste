@@ -176,7 +176,7 @@ def obtener_tablas_condiciones(condicion: Expression) -> tuple[str, str]:
     
     return tabla_izquierda, tabla_derecha
 
-def obtener_condiciones(conector_inicial: Expression) -> list[Expression]:
+def obtener_condiciones(conector_inicial: Expression, tipo_conectores: str = 'and') -> list[Expression]:
     """
     Dado un conector de sqlglot (Casi siempre un AND) obtiene todas las 
     condiciones existentes en ese conector y todos los que esten contenidos
@@ -185,6 +185,11 @@ def obtener_condiciones(conector_inicial: Expression) -> list[Expression]:
     Parametros
     --------------
     conector_inicial: Un conector de sqlglot (Casi siempre un AND)
+
+    tipo_conectores: Un string con el tipo de conectores que se espera
+                     que tenga las condiciones. Es decir que se espera
+                     que si hay mas de un conector se espera que todos
+                     sean ands o or.
 
     Retorna
     --------------
@@ -199,18 +204,18 @@ def obtener_condiciones(conector_inicial: Expression) -> list[Expression]:
         conector_actual = conectores.pop(0)
         
         # Caso base
-        if conector_actual.key != 'and':
+        if conector_actual.key != tipo_conectores:
             condiciones.append(conector_actual)
             break
 
         # Revisamos la parte izquierda del and
-        if conector_actual.this.key != 'and':
+        if conector_actual.this.key != tipo_conectores:
             condiciones.append(conector_actual.this)
         else:
             conectores.append(conector_actual.this)
         
         # Agregamos la parte derecha del and
-        if conector_actual.args['expression'].key != 'and':
+        if conector_actual.args['expression'].key != tipo_conectores:
             condiciones.append(conector_actual.args['expression'])
     
     return condiciones
@@ -241,13 +246,16 @@ def obtener_condiciones_where(consulta_sql_ast: Expression) -> dict[list[Express
     if consulta_sql_ast.args.get('where') == None:
          raise Exception(f'La consulta debe tener un WHERE. la consulta es: \n {consulta_sql_ast.sql()}')
 
-    condiciones = obtener_condiciones(consulta_sql_ast.args['where'].this)
+    condiciones_totales = obtener_condiciones(consulta_sql_ast.args['where'].this)
 
     condiciones_or = []
+    condiciones = []
 
-    for i in range(len(condiciones)):
-          if condiciones[i].key == 'or' or (condiciones[i].key == 'paren' and condiciones[i].this.key == 'or'):
-               condiciones_or.append(condiciones.pop(i))
+    for i in range(len(condiciones_totales)):
+            if condiciones_totales[i].key == 'or' or (condiciones_totales[i].key == 'paren' and condiciones_totales[i].this.key == 'or'):
+                condiciones_or.append(condiciones_totales[i])
+            else:
+                condiciones.append(condiciones_totales[i])
 
     if DEBUG: logging.info('Se obtuvieron todas las condiciones del WHERE en la consulta')
 
@@ -668,15 +676,62 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
             proyecciones[tabla].append(agregacion.this) 
     
     condiciones, condiciones_or = obtener_condiciones_where(consulta_sql_ast).values()
+    condiciones_por_tablas = clasificar_condiciones_where(condiciones, tablas, tablas_alias)
     
+    condiciones_or_mantener = []
+    
+    for condicion_or in condiciones_or:
+        mover = True
+        tabla = None
+        
+        condicion_or_sin_parentesis = condicion_or
+        
+        if condicion_or_sin_parentesis.key == 'paren':
+            condicion_or_sin_parentesis = condicion_or_sin_parentesis.this
+
+        for condicion in obtener_condiciones(condicion_or_sin_parentesis, 'or'):
+            tabla_1, tabla_2 = obtener_tablas_condiciones(condicion)
+
+            if tabla_1 == '' and tabla_2 == '':
+                mover = False
+                break
+            
+            if tabla_1 != '' and tabla_2 != '' and tabla_1 != tabla_2:
+                mover = False
+                break
+
+            if tabla == None:
+                if tabla_1 != '':
+                    tabla = tabla_1
+                    continue
+                
+                if tabla_2 != '':
+                    tabla = tabla_2
+            else:
+                if tabla_1 != '' and tabla_1 != tabla:
+                    mover = False
+                    break
+
+                if tabla_2 != '' and tabla_2 != tabla:
+                    mover = False
+                    break
+        
+        if mover and tabla != None:
+            if condiciones_por_tablas.get(tabla) == None:
+                condiciones_por_tablas[tabla] = []
+            
+            condiciones_por_tablas[tabla].append(condicion_or)
+        else:
+            condiciones_or_mantener.append(condicion_or)
+        
+    condiciones_or = condiciones_or_mantener
+
     condiciones_having = []
     
     condiciones_having_or = []
     
     if consulta_sql_ast.args.get('having') != None:
         condiciones_having, condiciones_having_or = obtener_condiciones_having(consulta_sql_ast).values()
-
-    condiciones_por_tablas = clasificar_condiciones_where(condiciones, tablas, tablas_alias)
 
     condiciones_joins_por_tablas = obtener_condiciones_joins(consulta_sql_ast, tablas, tablas_alias, condiciones_por_tablas)
     
