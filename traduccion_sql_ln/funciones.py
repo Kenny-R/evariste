@@ -63,7 +63,7 @@ def traducir_miniconsulta_sql(consulta: miniconsulta_sql) -> str:
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
 
-    return "Give me the " + proyeccion + " of the " + tabla + " where " + condicion
+    return "Give me the " + ", ".join(proyeccion) + " of the " + tabla + " where " + condicion
 
 def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:
     if condicion is None:
