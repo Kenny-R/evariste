@@ -6,6 +6,9 @@ from sqlglot import Expression
 from typing import Optional, Union
 from sqlglot.expressions import In, Binary, Not, Subquery
 
+import traduccion_sql_ln
+from ejecutar_LLM import *
+
 
 configuraciones = json.load(open("./configuraciones.json"))
 
@@ -67,6 +70,10 @@ class miniconsulta_sql:
     status: str
     dependencia: Optional[list[miniconsulta_sql]]
 
+    # Resultado final
+
+    resultado: str | None
+
     def __init__(self, 
                 tabla: str, 
                 proyecciones: list[Expression],
@@ -82,35 +89,23 @@ class miniconsulta_sql:
         self.condiciones_join = condiciones_join
         self.dependencia = dependencia
         self.status = STATUS[0]
+        self.resultado = None
 
     def crear_prompt(self):
-        raise Exception("Por implementar!!!")
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self)
+        proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
+        lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
+
+        return (traduccion, proyecciones, lista_columnas_condiciones)
+
+    def ejecutar(self):
+        traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
+        self.status = STATUS[1]
+        self.resultado = hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
+        self.status = STATUS[0]
+
     
-    """def _crear_representacion_SQL(self) -> str:
-                
-        lista_condiciones = []
-
-        if len(self.condiciones) != 0:
-            lista_condiciones += self.condiciones
-
-        if self.condiciones_join is not None and len(self.condiciones_join) != 0:
-            lista_condiciones += self.condiciones_join
-        
-        if len(lista_condiciones) == 0:
-            raise Exception("La miniconsulta debe tener al menos una condicion de cualquier tipo")
-        
-        condicion = lista_condiciones[0]
-        
-        for otra_condicion in lista_condiciones[1:]:
-            condicion = condicion.and_(otra_condicion)
-
-        tabla_form = self.tabla
-        
-        if self.alias != '':
-            tabla_form = alias(f'{self.tabla} AS {self.alias}',self.alias,dialect='postgres',)
-
-        return select(*self.proyecciones).from_(tabla_form).where(condicion).sql(dialect='postgres')
-    """
+    
     def imprimir_datos(self, nivel:int) -> str:
                 
         return f"""
