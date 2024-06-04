@@ -75,10 +75,10 @@ def prueba_singular():
     #                 )
     #                """s
 
-    consulta_sql = '''SELECT T1.Name FROM country as T1 WHERE 10 > T1.pgb and (T1.Continent = T1.Name OR T1.Continent = "Europe")'''
+    consulta_sql = '''SELECT T1.Name FROM country as T1 WHERE 10 > T1.pgb and (T1.Continent = T1.xd OR T1.Continent = "Europe")'''
     
     miniconsulta_sql = obtener_lista_miniconsultas(consulta_sql)[0]
-    print(traducir_miniconsulta_sql(miniconsulta_sql))
+    print(obtener_columnas_condicion(miniconsulta_sql))
     #for cond in miniconsulta_sql.condiciones:
     #    columna = cond.args.get('this').args.get('this') if isinstance(cond.args.get('this'), Column) else cond.args.get('expression').args.get('this')
     #    print(columna)
