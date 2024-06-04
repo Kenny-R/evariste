@@ -38,6 +38,7 @@ def procesar_condiciones(condiciones: list[Expression]) -> str:
     for i, condicion in enumerate(condiciones):
         if i != 0: 
             condiciones_str += " and "
+        
         if not (isinstance(condicion, Paren)):
             condiciones_str += procesar_condicion_aux(condicion)
             continue
@@ -48,9 +49,17 @@ def procesar_condiciones(condiciones: list[Expression]) -> str:
         condiciones_str += procesar_condicion_aux(parte_der)
 
     return condiciones_str
-            
+
+def traducir_proyecciones(consulta: miniconsulta_sql):
+    proyecciones_traducidas = []
+
+    for proyeccion in consulta.proyecciones:
+        proyecciones_traducidas.append(proyeccion.args.get('this').args.get('this'))
+    
+    return proyecciones_traducidas
+
 def traducir_miniconsulta_sql(consulta: miniconsulta_sql):
-    proyeccion: str = consulta.proyecciones[0].args.get('this').args.get('this')
+    proyeccion: str = traducir_proyecciones(consulta)
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
 
