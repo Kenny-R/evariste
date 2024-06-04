@@ -2,7 +2,9 @@ import json
 import logging
 from datetime import datetime
 from parser_SQL import *
-
+from sqlglot import Expression
+from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
+from traduccion_sql_ln.funciones import *
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
@@ -71,12 +73,16 @@ def prueba_singular():
     #                         T4.IsOfficial = 'T'
     #                         AND T4.Language = 'English'
     #                 )
-    #                """
+    #                """s
 
-    consulta_sql = '''SELECT sum(T1.SurfaceArea) FROM country as T1 WHERE (T1.Continent = "Asia" OR T1.Continent = "Europe") and T1.pgb = 1000'''
+    consulta_sql = '''SELECT T1.Name FROM country as T1 WHERE 10 > T1.pgb and (T1.Continent = T1.Name OR T1.Continent = "Europe")'''
     
-    print(obtener_ejecutor(consulta_sql))
-    
+    miniconsulta_sql = obtener_lista_miniconsultas(consulta_sql)[0]
+    print(traducir_miniconsulta_sql(miniconsulta_sql))
+    #for cond in miniconsulta_sql.condiciones:
+    #    columna = cond.args.get('this').args.get('this') if isinstance(cond.args.get('this'), Column) else cond.args.get('expression').args.get('this')
+    #    print(columna)
+
 def hacer_pruebas_en_lote():
     import pandas as pd
 
