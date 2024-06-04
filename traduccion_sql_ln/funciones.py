@@ -49,9 +49,26 @@ def procesar_condiciones(condiciones: list[Expression]) -> str:
 
     return condiciones_str
             
-def traducir_miniconsulta_sql(consulta: miniconsulta_sql):
+def traducir_miniconsulta_sql(consulta: miniconsulta_sql) -> str:
     proyeccion: str = consulta.proyecciones[0].args.get('this').args.get('this')
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
 
     return "Give me the " + proyeccion + " of the " + tabla + " where " + condicion
+
+def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:
+    if condicion is None:
+        return []
+    
+    operations: list[str] = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte']
+    if condicion.key in operations:
+        return ([str(condicion.args.get('this').args.get('this'))] if isinstance(condicion.args.get('this'),  Column) else []) + \
+            ([str(condicion.args.get('expression').args.get('this'))] if isinstance(condicion.args.get('expression'),  Column) and condicion.args.get('expression').args.get('table') is not None else [])
+    
+    return obtener_columnas_condicion_aux(condicion.args.get('this')) + obtener_columnas_condicion_aux(condicion.args.get('expression'))
+
+def obtener_columnas_condicion(consulta: miniconsulta_sql) -> list[str]:
+    columnas: list[str] = []
+    for cond in consulta.condiciones:
+        columnas += obtener_columnas_condicion_aux(cond)
+    return list(set(columnas))
