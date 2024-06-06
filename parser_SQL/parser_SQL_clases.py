@@ -98,13 +98,15 @@ class miniconsulta_sql:
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
-    def ejecutar(self):
-        traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
-        self.status = STATUS[1]
-        self.resultado = hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
-        self.status = STATUS[0]
-
-    
+    async def ejecutar(self):
+        if self.dependencia != None:
+            # Ejecuta teniendo en cuenta la dependentcia
+            pass
+        else: 
+            traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
+            self.status = STATUS[1]
+            self.resultado = hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
+            self.status = STATUS[2]
     
     def imprimir_datos(self, nivel:int) -> str:
                 
@@ -220,6 +222,12 @@ class join_miniconsultas_sql:
             por lo que ten presente que seguramente debamos pasarle de alguna forma
             la manera en la que vamos a ejecutar
         """
+        # 1) Ejecutamos las consultas independientes
+        # 1.1) Mientras hayan consultas sin terminar espera *
+
+        # 2) Ejecutamos las dependientes
+        # 2.1) Mientras hayan consulta sin terminar, espera  
+
         raise Exception("Por implementar!!!")
     
     def imprimir_datos(self, nivel: int) -> str:
