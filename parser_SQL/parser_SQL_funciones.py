@@ -32,6 +32,7 @@ def obtener_tablas(consulta_sql_ast: Expression) -> tuple[list[str], dict[str,st
     
     tablas: list[str] = []
     tablas_alias: dict[str, str] = {}
+
     
     if consulta_sql_ast.key != 'select':
         raise Exception('La consulta SQL necesita tener un "SELECT"')

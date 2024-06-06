@@ -6,10 +6,6 @@ from sqlglot import Expression
 from typing import Optional, Union
 from sqlglot.expressions import In, Binary, Not, Subquery
 
-import traduccion_sql_ln
-from ejecutar_LLM import *
-
-
 configuraciones = json.load(open("./configuraciones.json"))
 
 STATUS = configuraciones['miniconsultas_status']
@@ -92,6 +88,8 @@ class miniconsulta_sql:
         self.resultado = None
 
     def crear_prompt(self):
+        import traduccion_sql_ln
+
         traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
@@ -99,6 +97,8 @@ class miniconsulta_sql:
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
     def ejecutar(self):
+        from ejecutar_LLM import hacer_consulta
+
         if self.dependencia != None:
             # Ejecuta teniendo en cuenta la dependentcia
             pass
