@@ -98,7 +98,7 @@ class miniconsulta_sql:
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
-    async def ejecutar(self):
+    def ejecutar(self):
         if self.dependencia != None:
             # Ejecuta teniendo en cuenta la dependentcia
             pass
