@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-
+import asyncio
 import json
 from sqlglot import Expression
 from typing import Optional, Union
@@ -90,23 +90,31 @@ class miniconsulta_sql:
     def crear_prompt(self):
         import traduccion_sql_ln
 
-        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self)
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self, self.dependencia is not None)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
-    def ejecutar(self):
+    async def ejecutar(self):
         from ejecutar_LLM import hacer_consulta
+        
+        async def procesar(consulta_procesar: miniconsulta_sql):
+            if consulta_procesar.status == STATUS[0]:
+                traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
+                consulta_procesar.status = STATUS[1]
+                consulta_procesar.resultado = await hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
+                consulta_procesar.status = STATUS[2]
+
+            elif consulta_procesar.status == STATUS[1]:
+                while consulta_procesar.status != STATUS[2]:
+                    asyncio.sleep(5) 
 
         if self.dependencia != None:
-            # Ejecuta teniendo en cuenta la dependentcia
-            pass
-        else: 
-            traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
-            self.status = STATUS[1]
-            self.resultado = hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
-            self.status = STATUS[2]
+            tareas = [procesar(dep) for dep in self.dependencia]
+            await asyncio.gather(*tareas)
+        
+        procesar(self)
     
     def imprimir_datos(self, nivel:int) -> str:
                 

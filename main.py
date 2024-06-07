@@ -75,13 +75,15 @@ def prueba_singular():
     #                 )
     #                """s
 
-    consulta_sql = '''SELECT T1.Name FROM country as T1 WHERE 10 > T1.pgb and (T1.Continent = T1.xd OR T1.Continent = "Europe")'''
+    consulta_sql = '''SELECT T1.name 
+                      FROM employees as T1 
+                      JOIN personal_data as T2 ON T1.name = T2.name 
+                      WHERE T2.xd = 10 and T2.hola = 200 '''
     
     miniconsulta_sql = obtener_lista_miniconsultas(consulta_sql)[0]
-    print(obtener_columnas_condicion(miniconsulta_sql))
-    #for cond in miniconsulta_sql.condiciones:
-    #    columna = cond.args.get('this').args.get('this') if isinstance(cond.args.get('this'), Column) else cond.args.get('expression').args.get('this')
-    #    print(columna)
+    #print(miniconsulta_sql)
+    print(miniconsulta_sql)
+    print(traducir_miniconsulta_sql(miniconsulta_sql, True))
 
 def hacer_pruebas_en_lote():
     import pandas as pd

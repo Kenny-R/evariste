@@ -7,7 +7,6 @@ from parser_SQL import *
 from embeddings import *
 import json
 
-
 configuraciones = json.load(open("./configuraciones.json"))
 
 EMBEDDINGS_MODEL = configuraciones['EMBEDDINGS_MODEL']
@@ -70,7 +69,7 @@ def crear_instrucciones(columnas: list[str]):
     
     return (lambda *args: texto)
 
-def hacer_consulta(traduccion: str, columnas: list[str]):
+async def hacer_consulta(traduccion: str, columnas: list[str]):
     rag_chain = (
         {"context": retriever | format_docs, 
         "question": RunnablePassthrough(),
@@ -80,4 +79,4 @@ def hacer_consulta(traduccion: str, columnas: list[str]):
         | StrOutputParser()
     )
 
-    return rag_chain.invoke(traduccion)
+    return await rag_chain.invoke(traduccion)
