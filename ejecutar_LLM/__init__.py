@@ -5,6 +5,7 @@ from langchain_community.llms import Ollama
 from traduccion_sql_ln import *
 from parser_SQL import *
 from embeddings import *
+import mdpd
 import json
 
 configuraciones = json.load(open("./configuraciones.json"))
@@ -70,13 +71,26 @@ def crear_instrucciones(columnas: list[str]):
     return (lambda *args: texto)
 
 async def hacer_consulta(traduccion: str, columnas: list[str]):
+
+    columnas_traduccion = type(columnas)(columnas)
+    print(f"Procesando la pregunta:\n\t{traduccion}")
     rag_chain = (
         {"context": retriever | format_docs, 
         "question": RunnablePassthrough(),
-        "format_instructions": crear_instrucciones(columnas)}
+        "format_instructions": crear_instrucciones(columnas_traduccion)}
         | prompt
         | ollama
         | StrOutputParser()
     )
+    df = mdpd.from_md(rag_chain.invoke(traduccion))
+    if len(df) != 0:
+        if len(df.columns) > len(columnas):
+            # Hacer una busqueda de similitud por los nombres
+            df.columns = columnas + list(df.columns)[len(columnas):]
+        elif len(df.columns) < len(columnas):
+            # Hacer una busqueda de similitud por los nombres
+            df.columns = columnas[:len(df.columns)]
+        else:
+            df.columns = columnas
 
-    return await rag_chain.invoke(traduccion)
+    return df

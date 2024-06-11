@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import pandas as pd
 from sqlglot import Expression
 from typing import Optional, Union
 from sqlglot.expressions import In, Binary, Not, Subquery
@@ -64,11 +65,11 @@ class miniconsulta_sql:
     
     # Status disponibles: En espera, Ejecutando, Finalizado
     status: str
-    dependencia: Optional[list[miniconsulta_sql]]
+    dependencias: Optional[list[miniconsulta_sql]]
 
     # Resultado final
 
-    resultado: str | None
+    resultado: pd.DataFrame
 
     def __init__(self, 
                 tabla: str, 
@@ -76,21 +77,21 @@ class miniconsulta_sql:
                 condiciones: list[Expression],
                 alias:str = '',
                 condiciones_join: Optional[list[Expression]] = None,
-                dependencia: Optional[miniconsulta_sql] = None):
+                dependencias: Optional[list[miniconsulta_sql]] = []):
         
         self.tabla = tabla
         self.alias = alias
         self.proyecciones = proyecciones
         self.condiciones = condiciones
         self.condiciones_join = condiciones_join
-        self.dependencia = dependencia
+        self.dependencias = dependencias
         self.status = STATUS[0]
-        self.resultado = None
+        self.resultado = pd.DataFrame()
 
     def crear_prompt(self):
         import traduccion_sql_ln
 
-        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self, self.dependencia is not None)
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self, self.dependencias is not None)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
 
@@ -103,21 +104,25 @@ class miniconsulta_sql:
             if consulta_procesar.status == STATUS[0]:
                 traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
                 consulta_procesar.status = STATUS[1]
-                consulta_procesar.resultado = await hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
+                columnas = proyecciones + [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+                consulta_procesar.resultado = await hacer_consulta(traduccion, columnas)
                 consulta_procesar.status = STATUS[2]
 
             elif consulta_procesar.status == STATUS[1]:
                 while consulta_procesar.status != STATUS[2]:
                     asyncio.sleep(5) 
 
-        if self.dependencia != None:
-            tareas = [procesar(dep) for dep in self.dependencia]
+        if self.dependencias != None:
+            tareas = [procesar(dep) for dep in self.dependencias]
             await asyncio.gather(*tareas)
         
-        procesar(self)
-    
+        await procesar(self)
+
     def imprimir_datos(self, nivel:int) -> str:
-                
+        lista_dependencias_str = ""
+        if self.dependencias != []:
+            for dependencia in self.dependencias:
+                lista_dependencias_str+= dependencia.imprimir_datos(nivel+2) + "\n"
         return f"""
 {nivel*'    '}MINI CONSULTA
 {(nivel+1)*'    '}tabla: {self.tabla}
@@ -125,7 +130,7 @@ class miniconsulta_sql:
 {(nivel+1)*'    '}proyecciones: {[i.sql() for i in self.proyecciones]}
 {(nivel+1)*'    '}condiciones: {[i.sql() for i in self.condiciones]}
 {(nivel+1)*'    '}condiciones_join: {[i.sql() for i in self.condiciones_join]}
-{(nivel+1)*'    '}dependencia: {f'[{self.dependencia.imprimir_datos(nivel + 2) if self.dependencia != None else ""}]'}
+{(nivel+1)*'    '}dependencias: {lista_dependencias_str}
 {(nivel+1)*'    '}status: {self.status}
 {(nivel+1)*'    '}"""
 

@@ -59,9 +59,9 @@ def traducir_proyecciones(consulta: miniconsulta_sql):
     
     return list(proyecciones_traducidas)  
 
-def traducir_dataframe(df: pd.DataFrame, columna: str) -> str :
-    columna_list: list = df[columna].tolist()
-    columna_str: str = " whose " + columna + " is on ("
+def traducir_dataframe(df: pd.DataFrame, columna_dependiente: str, columna_independiente: str) -> str :
+    columna_list: list = df[columna_independiente].tolist()
+    columna_str: str = " whose " + columna_dependiente + " is on ("
 
     for i, item in enumerate(columna_list):
         if i != 0:
@@ -74,9 +74,7 @@ def traducir_dataframe(df: pd.DataFrame, columna: str) -> str :
 
 def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
     condiciones_join_str: str = ""
-    datadummy = [{'name': ['John', 'Alice', 'Bob'], 
-                  'age': [25, 30, 35]}]
-    
+        
     for i, condicion in enumerate(consulta.condiciones_join):
         if i != 0: 
             condiciones_join_str += " and "
@@ -91,8 +89,17 @@ def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
             tabla_consulta = condicion.args.get('expression')
             tabla_join = condicion.args.get('this')
 
-        if consulta.dependencia.alias == str(tabla_join.args.get('table')):
-            condiciones_join_str += traducir_dataframe(pd.DataFrame(datadummy[0]), str(tabla_consulta.args.get('this')))
+        # Por que puede darse el caso de que hayan varias dependencias        
+        for dependencia in consulta.dependencias:
+            if dependencia.alias == str(tabla_join.args.get('table')):
+                # print("AHHHHAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+                # print(dependencia.resultado)
+                # print("AHHHHAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+                
+                if dependencia.resultado.empty:
+                    break
+
+                condiciones_join_str += traducir_dataframe(dependencia.resultado, str(tabla_consulta.args.get('this')), str(tabla_join.args.get('this')))
 
     return condiciones_join_str
    

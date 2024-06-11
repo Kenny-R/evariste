@@ -1,16 +1,43 @@
 import json
 import logging
-from datetime import datetime
+import asyncio
+import warnings
 from parser_SQL import *
+from datetime import datetime
 from sqlglot import Expression
-from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
 from traduccion_sql_ln.funciones import *
+from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
+
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
+warnings.filterwarnings('ignore')
+
 def main():
-    prueba_singular()
+    # prueba_singular()
     # hacer_pruebas_en_lote()
+    prueba_LLM()
+
+def prueba_LLM():
+    # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    
+    lista_miniconsulta = obtener_lista_miniconsultas(consulta_sql)
+
+    # print(lista_miniconsulta)
+    for miniconsulta in lista_miniconsulta:
+
+        print("inicio de la ejecucion de la consulta")
+        asyncio.run(miniconsulta.ejecutar())
+        print("fin de la ejecucion de la consulta")
+
+        traduccion, _, _ = miniconsulta.crear_prompt()
+        
+        print("################################################")
+        print(f"Pregunta: {traduccion}")
+        print("Respuesta: ")
+        df = miniconsulta.resultado
+        print(df)
 
 def prueba_singular():
 
@@ -41,12 +68,12 @@ def prueba_singular():
     #                 """
 
     # consulta_sql = """
-                    # SELECT t1.border 
-                    # FROM border_info as t1
-                    # WHERE t1.state_name IN ( SELECT t2.border 
-                    #       FROM border_info as t2
-                    #       WHERE t2.state_name = "colorado" 
-                    #     );
+    #                 SELECT t1.border 
+    #                 FROM border_info as t1
+    #                 WHERE t1.state_name IN ( SELECT t2.border 
+    #                       FROM border_info as t2
+    #                       WHERE t2.state_name = "colorado" 
+    #                     );
     #                 """
 
     # consulta_sql = """
@@ -75,15 +102,15 @@ def prueba_singular():
     #                 )
     #                """s
 
-    consulta_sql = '''SELECT T1.name 
-                      FROM employees as T1 
-                      JOIN personal_data as T2 ON T1.name = T2.name 
-                      WHERE T2.xd = 10 and T2.hola = 200 '''
+    # consulta_sql = '''SELECT T1.name 
+    #                   FROM employees as T1 
+    #                   JOIN personal_data as T2 ON T1.name = T2.name 
+    #                   WHERE T2.xd = 10 and T2.hola = 200 '''
     
-    miniconsulta_sql = obtener_lista_miniconsultas(consulta_sql)[0]
-    #print(miniconsulta_sql)
-    print(miniconsulta_sql)
-    print(traducir_miniconsulta_sql(miniconsulta_sql, True))
+
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    miniconsulta_sql = obtener_ejecutor(consulta_sql)
+    print(miniconsulta_sql.miniconsultas_independientes)
 
 def hacer_pruebas_en_lote():
     import pandas as pd
