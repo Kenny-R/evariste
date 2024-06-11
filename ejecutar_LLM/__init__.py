@@ -61,10 +61,11 @@ def crear_instrucciones(columnas: list[str]):
     if len(columnas) > 0:
         texto += columnas.pop(0)
     
-    for _ in range(len(columnas) -1):
-        texto += f", {columnas.pop(0)}"
-    
-    texto += f"and {columnas.pop(0)}."
+    if len(columnas) > 0:
+        for _ in range(len(columnas) -1):
+            texto += f", {columnas.pop(0)}"
+        
+        texto += f"and {columnas.pop(0)}."
 
     texto += " Your response should be a table"
     

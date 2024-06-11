@@ -14,9 +14,9 @@ DEBUG = configuraciones['debug']
 warnings.filterwarnings('ignore')
 
 def main():
-    # prueba_singular()
+    prueba_singular()
     # hacer_pruebas_en_lote()
-    prueba_LLM()
+    # prueba_LLM()
 
 def prueba_LLM():
     # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
@@ -110,7 +110,7 @@ def prueba_singular():
 
     consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
     miniconsulta_sql = obtener_ejecutor(consulta_sql)
-    print(miniconsulta_sql.miniconsultas_independientes)
+    print(miniconsulta_sql)
 
 def hacer_pruebas_en_lote():
     import pandas as pd

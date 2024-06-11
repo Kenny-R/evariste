@@ -119,10 +119,12 @@ class miniconsulta_sql:
         await procesar(self)
 
     def imprimir_datos(self, nivel:int) -> str:
-        lista_dependencias_str = ""
+        lista_dependencias_str = "["
         if self.dependencias != []:
             for dependencia in self.dependencias:
                 lista_dependencias_str+= dependencia.imprimir_datos(nivel+2) + "\n"
+        
+        lista_dependencias_str += "]"
         return f"""
 {nivel*'    '}MINI CONSULTA
 {(nivel+1)*'    '}tabla: {self.tabla}
