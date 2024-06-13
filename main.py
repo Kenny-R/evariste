@@ -14,13 +14,15 @@ DEBUG = configuraciones['debug']
 warnings.filterwarnings('ignore')
 
 def main():
-    prueba_singular()
+    # prueba_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
+    pruebas_join()
 
 def prueba_LLM():
     # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
-    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
     
     lista_miniconsulta = obtener_lista_miniconsultas(consulta_sql)
 
@@ -39,7 +41,7 @@ def prueba_LLM():
         df = miniconsulta.resultado
         print(df)
 
-def prueba_singular():
+def prueba_parseo_singular():
 
     if DEBUG:
         nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
@@ -112,7 +114,7 @@ def prueba_singular():
     miniconsulta_sql = obtener_ejecutor(consulta_sql)
     print(miniconsulta_sql)
 
-def hacer_pruebas_en_lote():
+def pruebas_parseo_en_lote():
     import pandas as pd
 
     nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
@@ -137,6 +139,16 @@ def hacer_pruebas_en_lote():
             logging.warning(f'Se obtuvo el siguiente resultado:\n{str(resultado)}')
         except:
             logging.error(f'No se pudo completar el parse de la consulta {fila.loc["query"]}', exc_info=True)
+
+def pruebas_join():
+    # consulta_sql = """select t3.city_name from country as t1 join countrylanguage as t2 on t1.code = t2.countrycode join city as t3 on t1.code = t3.countrycode where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    # consulta_sql = """select t1.city_name from city as t1 where t1.country_name = 'china'"""
+    ejecutor: join_miniconsultas_sql = obtener_ejecutor(consulta_sql)
+    
+    ejecutor.ejecutar()
+
+    print(ejecutor.resultado)
 
 if __name__ == "__main__":
     main()
