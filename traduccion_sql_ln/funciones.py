@@ -91,7 +91,11 @@ def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
 
         # Por que puede darse el caso de que hayan varias dependencias        
         for dependencia in consulta.dependencias:
-            if dependencia.alias == str(tabla_join.args.get('table')):                
+            if dependencia.alias == str(tabla_join.args.get('table')):
+                # print("AHHHHAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+                # print(dependencia.resultado)
+                # print("AHHHHAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+                
                 if dependencia.resultado.empty:
                     break
 
@@ -100,18 +104,10 @@ def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
     return condiciones_join_str
    
 def traducir_miniconsulta_sql(consulta: miniconsulta_sql, tiene_dependencia: bool) -> str:
-    proyecciones: list[str] = traducir_proyecciones(consulta)
+    proyeccion: str = traducir_proyecciones(consulta)
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
-
-    proyecciones_juntas = ""
-
-    if len(proyecciones) == 1:
-        proyecciones_juntas = proyecciones[0]
-    elif len(proyecciones) > 1:
-        proyecciones_juntas = ", ".join(proyecciones[:-1]) + f" and {proyecciones[-1]}"
-
-    return "Give me the " + proyecciones_juntas + " of the " + tabla + (" where " + condicion  if condicion != "" else "") \
+    return "Give me the " + ", ".join(proyeccion) + " of the " + tabla + (" where " + condicion  if condicion != "" else "") \
         + (procesar_condiciones_join(consulta) if tiene_dependencia else "")
 
 def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:

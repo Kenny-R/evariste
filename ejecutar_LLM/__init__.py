@@ -34,9 +34,7 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored",
-    num_ctx = 4096,
-    temperature = 0.2
+    model="llama2-uncensored"
 )
 
 # Configuraciones para hacer las preguntas
@@ -44,7 +42,7 @@ system_prompt=("You are a highly intelligent question answering bot. "
                "If I ask you a question that is rooted in truth, you will give you the answer. "
                "If I ask you a question that is nonsense, trickery, or has no clear answer, you will respond with 'Unknown'. "
                "You will answer concisely. "
-               "Use only the given context to answer the question."
+               "Use the given context as a support to answer the question if you can't answer the question."
                "Context: {context}")
 
 prompt = ChatPromptTemplate.from_messages(
@@ -55,22 +53,20 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 def format_docs(docs):
-    contexto = "\n\n".join(doc.page_content for doc in docs)
-    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-    # print(contexto)
-    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-
     return "\n\n".join(doc.page_content for doc in docs)
 
 
 def crear_instrucciones(columnas: list[str]):
     texto = "Format the information as a table with columns for "
+    if len(columnas) > 0:
+        texto += columnas.pop(0)
     
-    if len(columnas) == 1:
-        texto += columnas[0]
-    elif len(columnas) > 1:
-        texto += ", ".join(columnas[:-1]) + f" and {columnas[-1]}"
-            
+    if len(columnas) > 0:
+        for _ in range(len(columnas) -1):
+            texto += f", {columnas.pop(0)}"
+        
+        texto += f"and {columnas.pop(0)}."
+
     texto += " Your response should be a table"
     
     return (lambda *args: texto)
