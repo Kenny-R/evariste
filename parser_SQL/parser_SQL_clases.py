@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-
+import asyncio
 import json
+import pandas as pd
 from sqlglot import Expression
 from typing import Optional, Union
 from sqlglot.expressions import In, Binary, Not, Subquery
@@ -64,11 +65,11 @@ class miniconsulta_sql:
     
     # Status disponibles: En espera, Ejecutando, Finalizado
     status: str
-    dependencia: Optional[list[miniconsulta_sql]]
+    dependencias: Optional[list[miniconsulta_sql]]
 
     # Resultado final
 
-    resultado: str | None
+    resultado: pd.DataFrame
 
     def __init__(self, 
                 tabla: str, 
@@ -76,40 +77,54 @@ class miniconsulta_sql:
                 condiciones: list[Expression],
                 alias:str = '',
                 condiciones_join: Optional[list[Expression]] = None,
-                dependencia: Optional[miniconsulta_sql] = None):
+                dependencias: Optional[list[miniconsulta_sql]] = []):
         
         self.tabla = tabla
         self.alias = alias
         self.proyecciones = proyecciones
         self.condiciones = condiciones
         self.condiciones_join = condiciones_join
-        self.dependencia = dependencia
+        self.dependencias = dependencias
         self.status = STATUS[0]
-        self.resultado = None
+        self.resultado = pd.DataFrame()
 
     def crear_prompt(self):
         import traduccion_sql_ln
 
-        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self)
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self, self.dependencias is not None)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
-    def ejecutar(self):
+    async def ejecutar(self):
         from ejecutar_LLM import hacer_consulta
+        
+        async def procesar(consulta_procesar: miniconsulta_sql):
+            if consulta_procesar.status == STATUS[0]:
+                traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
+                consulta_procesar.status = STATUS[1]
+                columnas = proyecciones + [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+                consulta_procesar.resultado = await hacer_consulta(traduccion, columnas)
+                consulta_procesar.status = STATUS[2]
 
-        if self.dependencia != None:
-            # Ejecuta teniendo en cuenta la dependentcia
-            pass
-        else: 
-            traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
-            self.status = STATUS[1]
-            self.resultado = hacer_consulta(traduccion, proyecciones + lista_columnas_condiciones)
-            self.status = STATUS[2]
-    
+            elif consulta_procesar.status == STATUS[1]:
+                while consulta_procesar.status != STATUS[2]:
+                    asyncio.sleep(5) 
+
+        if self.dependencias != None:
+            tareas = [procesar(dep) for dep in self.dependencias]
+            await asyncio.gather(*tareas)
+        
+        await procesar(self)
+
     def imprimir_datos(self, nivel:int) -> str:
-                
+        lista_dependencias_str = "["
+        if self.dependencias != []:
+            for dependencia in self.dependencias:
+                lista_dependencias_str+= dependencia.imprimir_datos(nivel+2) + "\n"
+        
+        lista_dependencias_str += "]"
         return f"""
 {nivel*'    '}MINI CONSULTA
 {(nivel+1)*'    '}tabla: {self.tabla}
@@ -117,7 +132,7 @@ class miniconsulta_sql:
 {(nivel+1)*'    '}proyecciones: {[i.sql() for i in self.proyecciones]}
 {(nivel+1)*'    '}condiciones: {[i.sql() for i in self.condiciones]}
 {(nivel+1)*'    '}condiciones_join: {[i.sql() for i in self.condiciones_join]}
-{(nivel+1)*'    '}dependencia: {f'[{self.dependencia.imprimir_datos(nivel + 2) if self.dependencia != None else ""}]'}
+{(nivel+1)*'    '}dependencias: {lista_dependencias_str}
 {(nivel+1)*'    '}status: {self.status}
 {(nivel+1)*'    '}"""
 
@@ -182,7 +197,7 @@ class join_miniconsultas_sql:
     lista_order_by: list[dict[str,str]]
     condiciones_join: list[Expression]
     condiciones_or: list[Expression]
-    resultado: str
+    resultado: pd.DataFrame
     limite: int
 
     def __init__(self, 
@@ -208,6 +223,7 @@ class join_miniconsultas_sql:
         self.condiciones_having_or = condiciones_having_or
         self.condiciones_having = condiciones_having
         self.lista_agregaciones = lista_agregaciones
+        self.resultado = pd.DataFrame()
 
     def ejecutar(self):
         """
@@ -222,14 +238,92 @@ class join_miniconsultas_sql:
             por lo que ten presente que seguramente debamos pasarle de alguna forma
             la manera en la que vamos a ejecutar
         """
-        # 1) Ejecutamos las consultas independientes
-        # 1.1) Mientras hayan consultas sin terminar espera *
+        # Ejecutamos las miniconsultas independientes y luego las dependientes
+        for mc in self.miniconsultas_independientes:
+            asyncio.run(mc.ejecutar())
 
-        # 2) Ejecutamos las dependientes
-        # 2.1) Mientras hayan consulta sin terminar, espera  
+        for mc in self.miniconsultas_dependientes:
+            asyncio.run(mc.ejecutar())
+      
+        # juntamos los resultados
+        resultado_final = pd.DataFrame()
 
-        raise Exception("Por implementar!!!")
-    
+        # Construimos un diccionario para buscar rapidamente las miniconsultas
+        miniconsultas = {mc.alias : mc for mc in self.miniconsultas_independientes + self.miniconsultas_dependientes}
+        hay_match = True
+
+        # tomamos el resultado de una de las consultas independientes para tener una base con la que empezar 
+        # a hacer merge. OJO: Esta parte podria no estar bien tienes que revisar eso         
+        consulta_base = self.miniconsultas_independientes[0]
+
+        resultado_final = consulta_base.resultado.copy()
+        resultado_final.columns = [f"{consulta_base.alias}.{columna.strip()}" for columna in resultado_final.columns]
+
+        tablas_procesadas = [consulta_base.alias]
+        condiciones_por_procesar = type(self.condiciones_join)(self.condiciones_join
+                                                               )
+        while len(condiciones_por_procesar) != 0:
+            if hay_match == False:
+                resultado_final = pd.DataFrame()
+                break
+
+            # Buscamos la siguiente condicion a procesar, Esta sera el que tenga alguna
+            # tabla procesada en su condicion
+            condicion_a_eliminar = -1
+            for i, condicion in enumerate(condiciones_por_procesar):
+                tabla1 = condicion.args.get('this').args.get('table').this
+                tabla2 = condicion.args.get('expression').args.get('table').this
+
+                if tabla1 in tablas_procesadas or tabla2 in tablas_procesadas:
+                    if tabla1 not in tablas_procesadas:
+                        resultados_agregar = miniconsultas[tabla1].resultado
+                        columna_en_resultado_final = condicion.args.get('expression')
+                        columna_en_resultados_agregar = condicion.args.get('this')
+                    else:
+                        resultados_agregar = miniconsultas[tabla2].resultado
+                        columna_en_resultado_final = condicion.args.get('this')
+                        columna_en_resultados_agregar = condicion.args.get('expression')
+                    
+                    condicion_a_eliminar = i
+                    break
+            
+            if tabla1 in tablas_procesadas and tabla2 in tablas_procesadas:
+                raise Exception("Es posible que se vuelvan a procesar las mismas tablas??")
+
+            if condicion_a_eliminar == -1:
+                raise Exception("Algo raro paso buscando la condicion para hacer merge")
+            else:
+                condiciones_por_procesar.pop(condicion_a_eliminar)
+
+            # Vamos a hacer merge de la tabla 1 a la tabla 2
+
+            # Revisamos si existe la columna objetivo en la tabla 1 y la tabla 2
+            # o si alguno de las tablas resultados estan vacios
+
+            if (resultado_final.empty or 
+                resultados_agregar.empty or 
+                str(columna_en_resultado_final).strip() not in resultado_final.columns or
+                str(columna_en_resultados_agregar.this).strip() not in resultados_agregar.columns):
+                
+                # print(f'resultado_final.empty: {resultado_final.empty}')
+                # print(f'resultados_agregar.empty: {resultados_agregar.empty}')
+                # print(f'str(columna_en_resultado_final).strip(): {str(columna_en_resultado_final).strip()}')
+                # print(f'resultado_final.columns: {resultado_final.columns}')
+                # print(f'str(columna_en_resultado_final).strip() not in resultado_final.columns: {str(columna_en_resultado_final).strip() not in resultado_final.columns}')
+                # print(f'str(columna_en_resultados_agregar.this).strip(): {str(columna_en_resultados_agregar.this)}')
+                # print(f'resultados_agregar.column: {resultados_agregar.columns}')
+                # print(f'str(columna_en_resultados_agregar.this).strip() not in resultados_agregar.columns): {str(columna_en_resultados_agregar.this) not in resultados_agregar.columns}')
+                
+                hay_match = False
+                continue
+            
+            columnas_anteriores = list(resultado_final.columns)
+            nuevas_columnas = [f"{columna_en_resultados_agregar.table}.{columna.strip()}" for columna in resultados_agregar.columns]
+            resultado_final = resultado_final.merge(resultados_agregar, right_on=str(columna_en_resultados_agregar.this).strip(), left_on=str(columna_en_resultado_final).strip())
+            resultado_final.columns = columnas_anteriores + nuevas_columnas       
+            tablas_procesadas.append(str(columna_en_resultados_agregar.table))
+        self.resultado = resultado_final
+
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
 {nivel*'    '}CONSULTA JOIN

@@ -1,7 +1,6 @@
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents.base import Document
 from langchain_text_splitters import TokenTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 

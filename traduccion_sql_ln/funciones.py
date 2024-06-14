@@ -1,5 +1,6 @@
 import sys
 sys.path.append("..")
+import pandas as pd
 
 from sqlglot import Expression
 from sqlglot.expressions import Paren, Column, Literal
@@ -8,9 +9,9 @@ from parser_SQL.parser_SQL_clases import *
 def obtener_operador(condicion: Expression, reverso: bool) -> str:
     match condicion.key:
         case "eq":
-            return " is equal to "
+            return " is "
         case "neq":
-            return " is not equal to "
+            return " is not "
         case "gt":
             return " is greater than " if not reverso else " is less than "
         case "gte":
@@ -51,19 +52,67 @@ def procesar_condiciones(condiciones: list[Expression]) -> str:
     return condiciones_str
 
 def traducir_proyecciones(consulta: miniconsulta_sql):
-    proyecciones_traducidas = []
+    proyecciones_traducidas: set[int] = set()
 
     for proyeccion in consulta.proyecciones:
-        proyecciones_traducidas.append(proyeccion.args.get('this').args.get('this'))
+        proyecciones_traducidas.add(proyeccion.args.get('this').args.get('this'))
     
-    return proyecciones_traducidas  
-            
-def traducir_miniconsulta_sql(consulta: miniconsulta_sql) -> str:
-    proyeccion: str = traducir_proyecciones(consulta)
+    return list(proyecciones_traducidas)  
+
+def traducir_dataframe(df: pd.DataFrame, columna_dependiente: str, columna_independiente: str) -> str :
+    columna_list: list = df[columna_independiente].tolist()
+    columna_str: str = " whose " + columna_dependiente + " is on ("
+
+    for i, item in enumerate(columna_list):
+        if i != 0:
+            columna_str += ", "
+        columna_str += str(item)
+    
+    columna_str += ")"
+
+    return columna_str
+
+def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
+    condiciones_join_str: str = ""
+        
+    for i, condicion in enumerate(consulta.condiciones_join):
+        if i != 0: 
+            condiciones_join_str += " and "
+
+        tabla_consulta: Expression
+        tabla_join: Expression 
+
+        if str(condicion.args.get('this').args.get('table')) == consulta.alias:
+            tabla_consulta = condicion.args.get('this')
+            tabla_join = condicion.args.get('expression')
+        else:
+            tabla_consulta = condicion.args.get('expression')
+            tabla_join = condicion.args.get('this')
+
+        # Por que puede darse el caso de que hayan varias dependencias        
+        for dependencia in consulta.dependencias:
+            if dependencia.alias == str(tabla_join.args.get('table')):                
+                if dependencia.resultado.empty:
+                    break
+
+                condiciones_join_str += traducir_dataframe(dependencia.resultado, str(tabla_consulta.args.get('this')), str(tabla_join.args.get('this')))
+
+    return condiciones_join_str
+   
+def traducir_miniconsulta_sql(consulta: miniconsulta_sql, tiene_dependencia: bool) -> str:
+    proyecciones: list[str] = traducir_proyecciones(consulta)
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
 
-    return "Give me the " + ", ".join(proyeccion) + " of the " + tabla + " where " + condicion
+    proyecciones_juntas = ""
+
+    if len(proyecciones) == 1:
+        proyecciones_juntas = proyecciones[0]
+    elif len(proyecciones) > 1:
+        proyecciones_juntas = ", ".join(proyecciones[:-1]) + f" and {proyecciones[-1]}"
+
+    return "Give me the " + proyecciones_juntas + " of the " + tabla + (" where " + condicion  if condicion != "" else "") \
+        + (procesar_condiciones_join(consulta) if tiene_dependencia else "")
 
 def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:
     if condicion is None:
@@ -71,7 +120,7 @@ def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:
     
     operations: list[str] = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte']
     if condicion.key in operations:
-        return ([str(condicion.args.get('this').args.get('this'))] if isinstance(condicion.args.get('this'),  Column) else []) + \
+        return ([str(condicion.args.get('this').args.get('this'))] if isinstance(condicion.args.get('this'),  Column) and condicion.args.get('this').args.get('table') is not None else []) + \
             ([str(condicion.args.get('expression').args.get('this'))] if isinstance(condicion.args.get('expression'),  Column) and condicion.args.get('expression').args.get('table') is not None else [])
     
     return obtener_columnas_condicion_aux(condicion.args.get('this')) + obtener_columnas_condicion_aux(condicion.args.get('expression'))

@@ -831,14 +831,17 @@ def obtener_miniconsultas_join(consulta_sql_ast: Expression) -> dict[str, list[m
                                                                   proyecciones = datos_miniconsultas[alias]['proyecciones'], 
                                                                   condiciones = datos_miniconsultas[alias]['condiciones'],
                                                                   condiciones_join = datos_miniconsultas[alias]['condiciones_joins'])
-       
-    for alias, dependencia in dependencias.items():
-        if miniconsultas_independientes.get(dependencia) != None:
-            dependencia = miniconsultas_independientes[dependencia]
+
+    for alias, dependencia_mc in dependencias.items():
+        if miniconsultas_independientes.get(dependencia_mc) != None:
+            dependencia = miniconsultas_independientes[dependencia_mc]
         else:
-            dependencia = miniconsultas_dependientes[dependencia]
+            dependencia = miniconsultas_dependientes[dependencia_mc]
         
-        miniconsultas_dependientes[alias].dependencia = dependencia
+        if len(miniconsultas_dependientes[alias].dependencias) == 0:
+            miniconsultas_dependientes[alias].dependencias = [dependencia]
+        else:
+            miniconsultas_dependientes[alias].dependencias.append(dependencia)
     
     lista_condiciones_join = []
     for miniconsulta in list(miniconsultas_dependientes.values()) + list(miniconsultas_independientes.values()):

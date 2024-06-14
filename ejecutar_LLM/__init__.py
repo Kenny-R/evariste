@@ -5,8 +5,8 @@ from langchain_community.llms import Ollama
 from traduccion_sql_ln import *
 from parser_SQL import *
 from embeddings import *
+import mdpd
 import json
-
 
 configuraciones = json.load(open("./configuraciones.json"))
 
@@ -34,7 +34,9 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored"
+    model="llama2-uncensored",
+    num_ctx = 4096,
+    temperature = 0.2
 )
 
 # Configuraciones para hacer las preguntas
@@ -42,7 +44,7 @@ system_prompt=("You are a highly intelligent question answering bot. "
                "If I ask you a question that is rooted in truth, you will give you the answer. "
                "If I ask you a question that is nonsense, trickery, or has no clear answer, you will respond with 'Unknown'. "
                "You will answer concisely. "
-               "Use the given context as a support to answer the question if you can't answer the question."
+               "Use only the given context to answer the question."
                "Context: {context}")
 
 prompt = ChatPromptTemplate.from_messages(
@@ -53,31 +55,47 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 def format_docs(docs):
+    contexto = "\n\n".join(doc.page_content for doc in docs)
+    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    # print(contexto)
+    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+
     return "\n\n".join(doc.page_content for doc in docs)
 
 
 def crear_instrucciones(columnas: list[str]):
     texto = "Format the information as a table with columns for "
-    if len(columnas) > 0:
-        texto += columnas.pop(0)
     
-    for _ in range(len(columnas) -1):
-        texto += f", {columnas.pop(0)}"
-    
-    texto += f"and {columnas.pop(0)}."
-
+    if len(columnas) == 1:
+        texto += columnas[0]
+    elif len(columnas) > 1:
+        texto += ", ".join(columnas[:-1]) + f" and {columnas[-1]}"
+            
     texto += " Your response should be a table"
     
     return (lambda *args: texto)
 
-def hacer_consulta(traduccion: str, columnas: list[str]):
+async def hacer_consulta(traduccion: str, columnas: list[str]):
+
+    columnas_traduccion = type(columnas)(columnas)
+    print(f"Procesando la pregunta:\n\t{traduccion}")
     rag_chain = (
         {"context": retriever | format_docs, 
         "question": RunnablePassthrough(),
-        "format_instructions": crear_instrucciones(columnas)}
+        "format_instructions": crear_instrucciones(columnas_traduccion)}
         | prompt
         | ollama
         | StrOutputParser()
     )
+    df = mdpd.from_md(rag_chain.invoke(traduccion))
+    if len(df) != 0:
+        if len(df.columns) > len(columnas):
+            # Hacer una busqueda de similitud por los nombres
+            df.columns = columnas + list(df.columns)[len(columnas):]
+        elif len(df.columns) < len(columnas):
+            # Hacer una busqueda de similitud por los nombres
+            df.columns = columnas[:len(df.columns)]
+        else:
+            df.columns = columnas
 
-    return rag_chain.invoke(traduccion)
+    return df

@@ -1,18 +1,47 @@
 import json
 import logging
-from datetime import datetime
+import asyncio
+import warnings
 from parser_SQL import *
+from datetime import datetime
 from sqlglot import Expression
-from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
 from traduccion_sql_ln.funciones import *
+from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
+
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
-def main():
-    prueba_singular()
-    # hacer_pruebas_en_lote()
+warnings.filterwarnings('ignore')
 
-def prueba_singular():
+def main():
+    # prueba_singular()
+    # hacer_pruebas_en_lote()
+    # prueba_LLM()
+    pruebas_join()
+
+def prueba_LLM():
+    # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
+    # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    
+    lista_miniconsulta = obtener_lista_miniconsultas(consulta_sql)
+
+    # print(lista_miniconsulta)
+    for miniconsulta in lista_miniconsulta:
+
+        print("inicio de la ejecucion de la consulta")
+        asyncio.run(miniconsulta.ejecutar())
+        print("fin de la ejecucion de la consulta")
+
+        traduccion, _, _ = miniconsulta.crear_prompt()
+        
+        print("################################################")
+        print(f"Pregunta: {traduccion}")
+        print("Respuesta: ")
+        df = miniconsulta.resultado
+        print(df)
+
+def prueba_parseo_singular():
 
     if DEBUG:
         nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
@@ -41,12 +70,12 @@ def prueba_singular():
     #                 """
 
     # consulta_sql = """
-                    # SELECT t1.border 
-                    # FROM border_info as t1
-                    # WHERE t1.state_name IN ( SELECT t2.border 
-                    #       FROM border_info as t2
-                    #       WHERE t2.state_name = "colorado" 
-                    #     );
+    #                 SELECT t1.border 
+    #                 FROM border_info as t1
+    #                 WHERE t1.state_name IN ( SELECT t2.border 
+    #                       FROM border_info as t2
+    #                       WHERE t2.state_name = "colorado" 
+    #                     );
     #                 """
 
     # consulta_sql = """
@@ -75,15 +104,17 @@ def prueba_singular():
     #                 )
     #                """s
 
-    consulta_sql = '''SELECT T1.Name FROM country as T1 WHERE 10 > T1.pgb and (T1.Continent = T1.xd OR T1.Continent = "Europe")'''
+    # consulta_sql = '''SELECT T1.name 
+    #                   FROM employees as T1 
+    #                   JOIN personal_data as T2 ON T1.name = T2.name 
+    #                   WHERE T2.xd = 10 and T2.hola = 200 '''
     
-    miniconsulta_sql = obtener_lista_miniconsultas(consulta_sql)[0]
-    print(obtener_columnas_condicion(miniconsulta_sql))
-    #for cond in miniconsulta_sql.condiciones:
-    #    columna = cond.args.get('this').args.get('this') if isinstance(cond.args.get('this'), Column) else cond.args.get('expression').args.get('this')
-    #    print(columna)
 
-def hacer_pruebas_en_lote():
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    miniconsulta_sql = obtener_ejecutor(consulta_sql)
+    print(miniconsulta_sql)
+
+def pruebas_parseo_en_lote():
     import pandas as pd
 
     nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
@@ -108,6 +139,16 @@ def hacer_pruebas_en_lote():
             logging.warning(f'Se obtuvo el siguiente resultado:\n{str(resultado)}')
         except:
             logging.error(f'No se pudo completar el parse de la consulta {fila.loc["query"]}', exc_info=True)
+
+def pruebas_join():
+    # consulta_sql = """select t3.city_name from country as t1 join countrylanguage as t2 on t1.code = t2.countrycode join city as t3 on t1.code = t3.countrycode where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    # consulta_sql = """select t1.city_name from city as t1 where t1.country_name = 'china'"""
+    ejecutor: join_miniconsultas_sql = obtener_ejecutor(consulta_sql)
+    
+    ejecutor.ejecutar()
+
+    print(ejecutor.resultado)
 
 if __name__ == "__main__":
     main()
