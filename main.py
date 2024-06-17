@@ -7,7 +7,6 @@ from datetime import datetime
 from sqlglot import Expression
 from traduccion_sql_ln.funciones import *
 from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
-
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
@@ -102,15 +101,16 @@ def prueba_singular():
     #                 )
     #                """s
 
-    # consulta_sql = '''SELECT T1.name 
-    #                   FROM employees as T1 
-    #                   JOIN personal_data as T2 ON T1.name = T2.name 
-    #                   WHERE T2.xd = 10 and T2.hola = 200 '''
+    consulta_sql = '''SELECT T1.name 
+                      FROM employees as T1 
+                      WHERE T1.name = "afsads" and T1.name NOT IN (
+                      SELECT T2.name 
+                      FROM employees as T2
+                      WHERE T2.name is True
+                      )'''
     
-
-    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    miniconsulta_sql = obtener_ejecutor(consulta_sql)
-    print(miniconsulta_sql)
+    miniconsulta_sql: miniconsulta_sql_anidadas = obtener_ejecutor(consulta_sql)
+    print(traducir_miniconsulta_sql_anidada(miniconsulta_sql))
 
 def hacer_pruebas_en_lote():
     import pandas as pd

@@ -197,7 +197,7 @@ class join_miniconsultas_sql:
     lista_order_by: list[dict[str,str]]
     condiciones_join: list[Expression]
     condiciones_or: list[Expression]
-    resultado: str
+    resultado: pd.DataFrame
     limite: int
 
     def __init__(self, 
@@ -237,13 +237,7 @@ class join_miniconsultas_sql:
             por lo que ten presente que seguramente debamos pasarle de alguna forma
             la manera en la que vamos a ejecutar
         """
-        # 1) Ejecutamos las consultas independientes
-        # 1.1) Mientras hayan consultas sin terminar espera *
-
-        # 2) Ejecutamos las dependientes
-        # 2.1) Mientras hayan consulta sin terminar, espera  
-
-        raise Exception("Por implementar!!!")
+        pass
     
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
@@ -288,7 +282,7 @@ class operacion_miniconsultas_sql:
     operacion: str
     parte_derecha: Union[miniconsulta_sql, join_miniconsultas_sql]
     parte_izquierda: Union[miniconsulta_sql, join_miniconsultas_sql, operacion_miniconsultas_sql]
-    restultado: str
+    restultado: pd.DataFrame
 
     def __init__(self, 
                  operacion:str, 
@@ -298,8 +292,9 @@ class operacion_miniconsultas_sql:
         self.operacion = operacion
         self.parte_derecha = parte_derecha
         self.parte_izquierda = parte_izquierda
+        self.restultado = pd.DataFrame()
     
-    def ejecutar(self):
+    async def ejecutar(self):
         """
             Aqui es donde se hara la operacion usando los resultados
             de las miniconsultas.
@@ -308,8 +303,19 @@ class operacion_miniconsultas_sql:
             haber realizado todas las peticiones al LLM y las miniconsultas
             deben haber sido ejecutadas antes de ejecutar esta funcion
         """
-        raise Exception("Por implementar!!!")
+        self.parte_derecha.ejecutar
+        await self.parte_izquierda.ejecutar
 
+        match self.operacion:
+            case "union":
+                self.restultado = pd.concat([self.parte_izquierda.restultado, self.parte_derecha.resultado], ignore_index=True)
+            case "intersect":
+                self.restultado = pd.merge(self.parte_izquierda.resultado, self.parte_derecha.resultado, how='inner')
+            case "except":
+                izq_tuplas: set[tuple] = set(self.parte_izquierda.resultado.apply(tuple, axis=1))
+                der_tuplas: set[tuple] = set(self.parte_derecha.resultado.apply(tuple, axis=1))
+                resultado_tuplas: set[tuple] = izq_tuplas - der_tuplas
+                self.restultado = pd.DataFrame(list(resultado_tuplas), columns=self.parte_izquierda.resultado.columns)
 
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
@@ -368,7 +374,7 @@ class miniconsulta_sql_anidadas:
                       todas las condiciones anidadas dentro de la consulta
     """
 
-    proyecciones: list[Expression]
+    proyecciones: dict[str, list[Expression]]
     agregaciones: list[Expression]
     aliases: list[str]
     tablas_aliases: dict[str, str]
@@ -431,30 +437,36 @@ class miniconsulta_sql_anidadas:
                     consultas.append({'operacion': cond.key,
                                 'tabla': cond.args.get('expression').args.get('table').args.get('this'),
                                 'columna': cond.args.get('expression').args.get('this').args.get('this'),
-                                'subquery': obtener_ejecutor(cond.args.get('this').args.get('this').sql())})
+                                'subconsulta': obtener_ejecutor(cond.args.get('this').args.get('this').sql())})
 
                 elif (isinstance(cond.args.get('expression'), Subquery)):
                     indices.append(i)
                     consultas.append({'operacion': cond.key,
                                 'tabla': cond.args.get('this').args.get('table').args.get('this'),
                                 'columna': cond.args.get('this').args.get('this').args.get('this'),
-                                'subquery': obtener_ejecutor(cond.args.get('expression').args.get('this').sql())})
+                                'subconsulta': obtener_ejecutor(cond.args.get('expression').args.get('this').sql())})
             
             elif (isinstance(cond, Not)):
                 indices.append(i)
                 consultas.append({'operacion': f'{cond.key} {cond.args.get("this").key}',
                                 'tabla': cond.args.get('this').args.get('this').args.get('table').args.get('this'),
                                 'columna': cond.args.get('this').args.get('this').args.get('this').args.get('this'),
-                                'subquery': obtener_ejecutor(cond.args.get('this').args.get('query').args.get('this').sql())})
+                                'subconsulta': obtener_ejecutor(cond.args.get('this').args.get('query').args.get('this').sql())})
                 
             elif (isinstance(cond, In)):
                 indices.append(i)
                 consultas.append({'operacion': cond.key,
                             'tabla': cond.args.get('this').args.get('table').args.get('this'),
                             'columna': cond.args.get('this').args.get('this').args.get('this'),
-                            'subquery': obtener_ejecutor(cond.args.get('query').args.get('this').sql())})
+                            'subconsulta': obtener_ejecutor(cond.args.get('query').args.get('this').sql())})
 
         return (consultas, [condiciones[i] for i in range(len(condiciones)) if i not in indices])
+
+    async def ejecutar(self):
+        for subconsulta in self.subconsultas:
+            await subconsulta['subconsulta'].ejecutar()
+
+        
 
     def imprimir_datos(self, nivel: int) -> str:
         proyecciones_imprimir = []
