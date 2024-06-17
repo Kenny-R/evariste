@@ -41,16 +41,14 @@ ollama = Ollama(
 
 # Configuraciones para hacer las preguntas
 system_prompt=("You are a highly intelligent question answering bot. "
-               "If I ask you a question that is rooted in truth, you will give you the answer. "
-               "If I ask you a question that is nonsense, trickery, or has no clear answer, you will respond with 'Unknown'. "
                "You will answer concisely. "
-               "Use only the given context to answer the question."
+               "Use only the given context to answer the question. "
                "Context: {context}")
 
 prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt),
-        ("human", "Answer the query.\n{format_instructions}\n{question}\n"),
+        ("human", "Answer the query.\n{question}\n{examples}\n{format_instructions}\n"),
     ],
 )
 
@@ -64,6 +62,7 @@ def format_docs(docs):
 
 
 def crear_instrucciones(columnas: list[str]):
+    texto = "Instructions: \n"
     texto = "Format the information as a table with columns for "
     
     if len(columnas) == 1:
@@ -71,8 +70,25 @@ def crear_instrucciones(columnas: list[str]):
     elif len(columnas) > 1:
         texto += ", ".join(columnas[:-1]) + f" and {columnas[-1]}"
             
-    texto += " Your response should be a table"
+    texto += " Your response should be a table\n"
+
+    texto += "If your answer is a number like millions or thousands, return the always all its digits using the format used in America. \n"
+    texto += "If I ask you a question that is rooted in truth, you will give you the answer.\n"
+    texto += "If I ask you a question that is nonsense, trickery, or has no clear answer, you will respond with 'Unknown'. "
     
+    return (lambda *args: texto)
+
+def crear_ejemplos():
+    texto = "Examples: \n"
+    fewshot_chatgpt = [
+                        ['What is human life expectancy in the United States?', '78.'],
+                        ['Who was president of the United States in 1955?', 'Dwight D. Eisenhower.'],
+                        ['Which party was founded by Gramsci?', 'Comunista.'],
+                        ['What is the capital of France?', 'Paris.'],
+                        ['What is a continent starting with letter O?', 'Oceania.'],
+                        ['Where were the 1992 Olympics held?', 'Barcelona.'],
+                        ['How many squigs are in a bonk?', 'Unknown'],
+                        ['What is the population of Venezuela: 28,300,000']]
     return (lambda *args: texto)
 
 async def hacer_consulta(traduccion: str, columnas: list[str]):
@@ -82,7 +98,8 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     rag_chain = (
         {"context": retriever | format_docs, 
         "question": RunnablePassthrough(),
-        "format_instructions": crear_instrucciones(columnas_traduccion)}
+        "format_instructions": crear_instrucciones(columnas_traduccion),
+        "examples": crear_ejemplos()}
         | prompt
         | ollama
         | StrOutputParser()

@@ -674,7 +674,8 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
             if proyecciones.get(tabla) == None:
                 proyecciones[tabla] = []
 
-            proyecciones[tabla].append(agregacion.this) 
+            if agregacion.this not in proyecciones[tabla]:
+                proyecciones[tabla].append(agregacion.this) 
     
     condiciones, condiciones_or = obtener_condiciones_where(consulta_sql_ast).values()
     condiciones_por_tablas = clasificar_condiciones_where(condiciones, tablas, tablas_alias)

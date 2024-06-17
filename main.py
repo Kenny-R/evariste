@@ -14,7 +14,7 @@ DEBUG = configuraciones['debug']
 warnings.filterwarnings('ignore')
 
 def main():
-    # prueba_singular()
+    # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
     pruebas_join()
@@ -110,9 +110,10 @@ def prueba_parseo_singular():
     #                   WHERE T2.xd = 10 and T2.hola = 200 '''
     
 
-    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    miniconsulta_sql = obtener_ejecutor(consulta_sql)
-    print(miniconsulta_sql)
+    # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
+    # miniconsulta_sql = obtener_ejecutor(consulta_sql)
+    print(obtener_ejecutor(consulta_sql).lista_agregaciones)
 
 def pruebas_parseo_en_lote():
     import pandas as pd
@@ -142,7 +143,10 @@ def pruebas_parseo_en_lote():
 
 def pruebas_join():
     # consulta_sql = """select t3.city_name from country as t1 join countrylanguage as t2 on t1.code = t2.countrycode join city as t3 on t1.code = t3.countrycode where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    # consulta_sql = """select t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    # consulta_sql = """select t1.name, t1.capital from country as t1 join language as t2 on t1.language = t2.language_name where t1.continent = 'north america' order by t2.language_name ASC, t1.name DESC, t1.capital ASC"""
+    # consulta_sql = """select t1.name, t1.population from country as t1 where t1.continent = 'north america'"""
+    consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
     # consulta_sql = """select t1.city_name from city as t1 where t1.country_name = 'china'"""
     ejecutor: join_miniconsultas_sql = obtener_ejecutor(consulta_sql)
     

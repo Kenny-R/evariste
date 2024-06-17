@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import asyncio
+import re
 import json
+import asyncio
 import pandas as pd
 from sqlglot import Expression
 from typing import Optional, Union
@@ -225,26 +226,9 @@ class join_miniconsultas_sql:
         self.lista_agregaciones = lista_agregaciones
         self.resultado = pd.DataFrame()
 
-    def ejecutar(self):
-        """
-            Aqui es donde se hara el o los joins usando los resultados
-            de las miniconsultas.
+    
+    def _juntar_resultados(self):
 
-            Ten en cuenta que este ejecutar debe ser llamado despues de 
-            haber realizado todas las peticiones al LLM y las miniconsultas
-            deben haber sido ejecutadas antes de ejecutar esta funcion
-
-            Aqui probablemente le pasemos distintas estrategias para ejecutar un join
-            por lo que ten presente que seguramente debamos pasarle de alguna forma
-            la manera en la que vamos a ejecutar
-        """
-        # Ejecutamos las miniconsultas independientes y luego las dependientes
-        for mc in self.miniconsultas_independientes:
-            asyncio.run(mc.ejecutar())
-
-        for mc in self.miniconsultas_dependientes:
-            asyncio.run(mc.ejecutar())
-      
         # juntamos los resultados
         resultado_final = pd.DataFrame()
 
@@ -323,6 +307,124 @@ class join_miniconsultas_sql:
             resultado_final.columns = columnas_anteriores + nuevas_columnas       
             tablas_procesadas.append(str(columna_en_resultados_agregar.table))
         self.resultado = resultado_final
+
+    def _ordenar_resultados(self):
+        columnas = []
+        ascendente = []
+
+        for datos_order_by in self.lista_order_by:
+            tabla, columna, tipo = datos_order_by.values()
+            columnas.append(f"{tabla}.{columna}".strip())
+            ascendente.append(tipo == "ASC")
+
+        self.resultado.sort_values(by = columnas, ascending= ascendente, inplace=True)
+
+    def _transformar_abreviaciones(self, cantidad:str):
+        exponente = 0
+        cantidad_procesada = cantidad
+        
+        unidades = {"thousand": 3,"million": 6, "billion": 9, "trillion": 12}
+        abreviaciones = {"K":3, "M":6, "B":9, "T":12}
+
+        for unidad in unidades.keys():
+            if re.findall(unidad,cantidad_procesada, re.I) != []:
+                exponente += unidades[unidad] * len(re.findall(unidad,cantidad_procesada))
+
+                cantidad_procesada = re.sub(unidad, "",cantidad_procesada,flags=re.I)
+        
+        for abreviacion in abreviaciones.keys():
+            if re.findall(unidad,cantidad_procesada, re.I) != []:
+                exponente += abreviaciones[abreviacion] * len(re.findall(abreviacion,cantidad_procesada))
+
+                cantidad_procesada = re.sub(abreviacion, "",cantidad_procesada,flags=re.I)
+        
+        return (exponente, cantidad_procesada)
+
+    def _procesar_cantidades(self, cantidad: str):
+        # procesamos las unidades (Millones, Billones, Miles, M, B, K)
+        exponente,cantidad_procesada = self._transformar_abreviaciones(cantidad)
+
+        # Quitamos todo lo que no sea un numero o un punto
+        cantidad_procesada = re.sub("[^\.1-9]","", cantidad_procesada)
+
+        #pasamos a flotante
+        try:
+            cantidad_final= float(cantidad_procesada)
+        except:
+            raise Exception("No se pudo transformar el numero a flotante")
+        
+        cantidad_final *= 10**(exponente)
+
+        return cantidad_final
+
+    def _hacer_agregaciones(self):
+        resultado = pd.DataFrame()
+        for agregacion in self.lista_agregaciones:
+            columna = agregacion.this.sql()
+            
+            if columna not in self.resultado.columns:
+                continue
+            
+            datos = self.resultado[columna]
+
+            if agregacion.key == "count":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado, agregacion.sql(), [len(datos)])
+
+                continue
+            
+            datos = datos.apply(self._procesar_cantidades)
+            
+            if agregacion.key == "min":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado, agregacion.sql(), datos.min())
+
+            elif agregacion.key == "max":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado, agregacion.sql(), datos.max()) 
+            
+            elif agregacion.key == "avg":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado, agregacion.sql(), datos.mean())
+            
+            elif agregacion.key == "sum":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado, agregacion.sql(), datos.sum())
+            
+            
+        
+        self.resultado = resultado
+
+
+    def ejecutar(self):
+        """
+            Aqui es donde se hara el o los joins usando los resultados
+            de las miniconsultas.
+
+            Ten en cuenta que este ejecutar debe ser llamado despues de 
+            haber realizado todas las peticiones al LLM y las miniconsultas
+            deben haber sido ejecutadas antes de ejecutar esta funcion
+
+            Aqui probablemente le pasemos distintas estrategias para ejecutar un join
+            por lo que ten presente que seguramente debamos pasarle de alguna forma
+            la manera en la que vamos a ejecutar
+        """
+        # Ejecutamos las miniconsultas independientes y luego las dependientes
+        for mc in self.miniconsultas_independientes:
+            asyncio.run(mc.ejecutar())
+
+        for mc in self.miniconsultas_dependientes:
+            asyncio.run(mc.ejecutar())
+
+        
+        self._juntar_resultados()
+
+        if self.limite > 0:
+            self.resultado = self.resultado.iloc[:self.limite]
+        
+        self._ordenar_resultados()
+      
+        self._hacer_agregaciones()
 
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
