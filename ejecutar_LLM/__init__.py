@@ -34,9 +34,7 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored",
-    num_ctx = 4096,
-    temperature = 0.2
+    model="llama2-uncensored"
 )
 
 # Configuraciones para hacer las preguntas
@@ -53,11 +51,6 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 def format_docs(docs):
-    contexto = "\n\n".join(doc.page_content for doc in docs)
-    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-    # print(contexto)
-    # print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-
     return "\n\n".join(doc.page_content for doc in docs)
 
 

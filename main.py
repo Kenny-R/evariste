@@ -7,7 +7,6 @@ from datetime import datetime
 from sqlglot import Expression
 from traduccion_sql_ln.funciones import *
 from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
-
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
@@ -17,12 +16,10 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
-    pruebas_join()
 
 def prueba_LLM():
     # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
-    # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
+    consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
     
     lista_miniconsulta = obtener_lista_miniconsultas(consulta_sql)
 
@@ -41,7 +38,7 @@ def prueba_LLM():
         df = miniconsulta.resultado
         print(df)
 
-def prueba_parseo_singular():
+def prueba_singular():
 
     if DEBUG:
         nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
@@ -115,7 +112,7 @@ def prueba_parseo_singular():
     # miniconsulta_sql = obtener_ejecutor(consulta_sql)
     print(obtener_ejecutor(consulta_sql).lista_agregaciones)
 
-def pruebas_parseo_en_lote():
+def hacer_pruebas_en_lote():
     import pandas as pd
 
     nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
