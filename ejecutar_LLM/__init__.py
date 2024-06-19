@@ -34,7 +34,9 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored"
+    model="llama2-uncensored",
+    num_ctx=4096,
+    temperature = 0.2
 )
 
 # Configuraciones para hacer las preguntas

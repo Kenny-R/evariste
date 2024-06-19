@@ -4,9 +4,7 @@ import asyncio
 import warnings
 from parser_SQL import *
 from datetime import datetime
-from sqlglot import Expression
 from traduccion_sql_ln.funciones import *
-from sqlglot.expressions import In, Binary, Not, Subquery, Paren, Column
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
 
@@ -16,6 +14,11 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
+    # prueba_singular()
+    # pruebas_operacion()
+    pruebas_join()
+    # pruebas_anidamientos()
+
 
 def prueba_LLM():
     # consulta_sql= '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Code = T2.CountryCode WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
@@ -99,18 +102,13 @@ def prueba_singular():
     #                         T4.IsOfficial = 'T'
     #                         AND T4.Language = 'English'
     #                 )
-    #                """s
-
-    # consulta_sql = '''SELECT T1.name 
-    #                   FROM employees as T1 
-    #                   JOIN personal_data as T2 ON T1.name = T2.name 
-    #                   WHERE T2.xd = 10 and T2.hola = 200 '''
+    #                """
     
 
     # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
+    #consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
     # miniconsulta_sql = obtener_ejecutor(consulta_sql)
-    print(obtener_ejecutor(consulta_sql).lista_agregaciones)
+    # print(obtener_ejecutor(consulta_sql))
 
 def hacer_pruebas_en_lote():
     import pandas as pd
@@ -143,12 +141,37 @@ def pruebas_join():
     # consulta_sql = """select t3.name from country as t1 join countrylanguage as t2 on  t2.country_name = t1.country_name join city as t3 on  t3.country_name = t1.country_name where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
     # consulta_sql = """select t1.name, t1.capital from country as t1 join language as t2 on t1.language = t2.language_name where t1.continent = 'north america' order by t2.language_name ASC, t1.name DESC, t1.capital ASC"""
     # consulta_sql = """select t1.name, t1.population from country as t1 where t1.continent = 'north america'"""
-    consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
+    # consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
     # consulta_sql = """select t1.city_name from city as t1 where t1.country_name = 'china'"""
+    # consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T"'''
+    # consulta_sql = '''SELECT MIN ( T2.LENGTH ) FROM river AS T2 WHERE T2.country = "United States"'''
+    # consulta_sql = '''SELECT t2.capital FROM state AS t2 JOIN city AS t1 ON t2.state_name = t1.state_name WHERE t1.city_name = "durham"'''
+    
+    consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" AND T1.continent = "Europe"'''
+    
     ejecutor: join_miniconsultas_sql = obtener_ejecutor(consulta_sql)
     
     ejecutor.ejecutar()
 
+    print(ejecutor.resultado)
+
+def pruebas_operacion():
+    consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" EXCEPT SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" AND T1.continent = "Europe"'''
+    ejecutor: operacion_miniconsultas_sql = obtener_ejecutor(consulta_sql)
+    
+    ejecutor.ejecutar()
+
+    print("Resultado final: ")
+    print(ejecutor.resultado)
+
+def pruebas_anidamientos():
+    consulta_sql = '''select t1.capital from country as t1 where t1.name in (select t2.name from country as t2 where t2.country_language = "Spanish")'''
+    
+    ejecutor: miniconsulta_sql_anidadas = obtener_ejecutor(consulta_sql)
+    
+    ejecutor.ejecutar()
+
+    print("Resultado final: ")
     print(ejecutor.resultado)
 
 if __name__ == "__main__":

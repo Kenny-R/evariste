@@ -751,7 +751,7 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
             datos_miniconsultas[alias]['proyecciones'] = []
         
         if proyecciones_joins.get(alias) != None:
-            datos_miniconsultas[alias]['proyecciones'] += proyecciones_joins[alias]
+            datos_miniconsultas[alias]['proyecciones'] += [i for i in proyecciones_joins[alias] if i not in datos_miniconsultas[alias]['proyecciones']]
         
         if condiciones_por_tablas.get(alias) != None:
             datos_miniconsultas[alias]['condiciones'] = condiciones_por_tablas[alias]
@@ -764,7 +764,8 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
             datos_miniconsultas[alias]['condiciones_joins'] = []
 
     resultado = {'datos miniconsultas': datos_miniconsultas, 
-                 'datos globales': {'agregaciones': agregaciones,
+                 'datos globales': {'proyecciones': proyecciones,
+                                    'agregaciones': agregaciones,
                                     'order by': [],
                                     'limite': -1,
                                     'group by': [],
@@ -804,7 +805,6 @@ def obtener_miniconsultas_join(consulta_sql_ast: Expression) -> dict[str, list[m
         resultado de otra miniconsulta) y las independientes.
     """
     if DEBUG: logging.info('La consulta tiene 0 o mas JOINS, se procede a dividir la consulta')
-
 
     datos_divididos_joins = dividir_joins(consulta_sql_ast)
     datos_miniconsultas = datos_divididos_joins['datos miniconsultas']
@@ -848,7 +848,8 @@ def obtener_miniconsultas_join(consulta_sql_ast: Expression) -> dict[str, list[m
     for miniconsulta in list(miniconsultas_dependientes.values()) + list(miniconsultas_independientes.values()):
         lista_condiciones_join += miniconsulta.condiciones_join
 
-    return {'ejecutor': join_miniconsultas_sql(condiciones_join = lista_condiciones_join,
+    return {'ejecutor': join_miniconsultas_sql(proyecciones=datos_globales['proyecciones'],
+                                               condiciones_join = lista_condiciones_join,
                                                miniconsultas_dependientes = list(miniconsultas_dependientes.values()), 
                                                miniconsultas_independientes = list(miniconsultas_independientes.values()),
                                                lista_group_by = datos_globales['group by'],

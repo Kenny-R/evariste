@@ -62,20 +62,11 @@ def procesar_condiciones(condiciones: list[Expression]) -> str:
 
     return condiciones_str
 
-def traducir_proyecciones(consulta: miniconsulta_sql):
+def traducir_proyecciones(proyecciones: list[Expression]):
     proyecciones_traducidas: set[int] = set()
 
-    for proyeccion in consulta.proyecciones:
+    for proyeccion in proyecciones:
         proyecciones_traducidas.add(proyeccion.args.get('this').args.get('this'))
-    
-    return list(proyecciones_traducidas)  
-
-def traducir_proyecciones_anidada(consulta: miniconsulta_sql_anidadas):
-    proyecciones_traducidas: set[int] = set()
-
-    for i in consulta.proyecciones.keys():
-        for proyeccion in consulta.proyecciones[i]:
-            proyecciones_traducidas.add(str(proyeccion.args.get('this')))
     
     return list(proyecciones_traducidas)  
 
@@ -83,8 +74,12 @@ def traducir_dataframe(df: pd.DataFrame,
                        columna_dependiente: str, 
                        columna_independiente: str,
                        operacion: str = " is ") -> str :
-    columna_list: list = df[columna_independiente].tolist()
-    columna_str: str = "whose " + columna_dependiente + operacion + " on ("
+    columna_list: list = []
+
+    if columna_independiente in df.columns:
+        columna_list = df[columna_independiente].tolist()
+    
+    columna_str: str = " whose " + columna_dependiente + operacion + " in ("
 
     for i, item in enumerate(columna_list):
         if i != 0:
@@ -127,7 +122,7 @@ def procesar_condiciones_join(consulta: miniconsulta_sql) -> str:
     return condiciones_join_str
    
 def traducir_miniconsulta_sql(consulta: miniconsulta_sql, tiene_dependencia: bool) -> str:
-    proyeccion: list[str] = traducir_proyecciones(consulta)
+    proyeccion: list[str] = traducir_proyecciones(consulta.proyecciones)
     tabla: str = consulta.tabla
     condicion: str = procesar_condiciones(consulta.condiciones)
     return "Give me the " + ", ".join(proyeccion) + " of the " + tabla + (" where " + condicion  if condicion != "" else "") \
@@ -144,9 +139,9 @@ def obtener_columnas_condicion_aux(condicion: Expression) -> list[str]:
     
     return obtener_columnas_condicion_aux(condicion.args.get('this')) + obtener_columnas_condicion_aux(condicion.args.get('expression'))
 
-def obtener_columnas_condicion(consulta: miniconsulta_sql) -> list[str]:
+def obtener_columnas_condicion(condiciones: list[Expression]) -> list[str]:
     columnas: list[str] = []
-    for cond in consulta.condiciones:
+    for cond in condiciones:
         columnas += obtener_columnas_condicion_aux(cond)
     return list(set(columnas))
 
@@ -156,19 +151,21 @@ def procesar_anidamientos(lista_anidamientos: list[dict[str, str | Expression]])
     for info_subconsulta in lista_anidamientos:
         proyeccion_sub: str 
         if len(info_subconsulta['subconsulta'].miniconsultas_dependientes) != 0:
-            proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_dependientes[0].proyecciones[0].args.get('this'))
+            proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_dependientes[0].proyecciones[0])
         else:
-            proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_independientes[0].proyecciones[0].args.get('this'))
-        anidamiento_str += " and " + \
-            traducir_dataframe(info_subconsulta['subconsulta'].resultado, 
+            proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_independientes[0].proyecciones[0])
+        
+        print(info_subconsulta['subconsulta'].resultado)
+        print(proyeccion_sub)
+        anidamiento_str += traducir_dataframe(info_subconsulta['subconsulta'].resultado, 
                                str(info_subconsulta['columna']), 
                                proyeccion_sub, obtener_operador(info_subconsulta['operacion']))
         
     return anidamiento_str
 
 def traducir_miniconsulta_sql_anidada(consulta: miniconsulta_sql_anidadas) -> str:
-    proyeccion: list[str] = traducir_proyecciones_anidada(consulta)
-    tabla: str = consulta.tablas_aliases[consulta.aliases[0]]
+    tabla: str = list(consulta.tablas_aliases.values())[0]
+    proyeccion: list[str] = traducir_proyecciones(consulta.proyecciones[list(consulta.tablas_aliases.keys())[0]])
     condicion: str = procesar_condiciones(consulta.condiciones)
     return "Give me the " + ", ".join(proyeccion) + " of the " + tabla + (" where " + condicion  if condicion != "" else "") \
         + (procesar_anidamientos(consulta.subconsultas) if consulta.subconsultas is not None else "")

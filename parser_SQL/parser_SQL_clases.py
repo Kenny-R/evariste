@@ -93,8 +93,8 @@ class miniconsulta_sql:
         import traduccion_sql_ln
 
         traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(self, self.dependencias is not None)
-        proyecciones = traduccion_sql_ln.traducir_proyecciones(self)
-        lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self)
+        proyecciones = traduccion_sql_ln.traducir_proyecciones(self.proyecciones)
+        lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self.condiciones)
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
@@ -189,6 +189,7 @@ class join_miniconsultas_sql:
         ejecutar: Funcion que realizara todos los joins utilizando las
                   miniconsultas disponibles
     """
+    proyecciones: list[Expression]
     miniconsultas_independientes: list[miniconsulta_sql]
     miniconsultas_dependientes: list[miniconsulta_sql]
     condiciones_having_or: list[Expression]
@@ -202,6 +203,7 @@ class join_miniconsultas_sql:
     limite: int
 
     def __init__(self, 
+                 proyecciones: list[Expression],
                  condiciones_join: list[Expression],
                  miniconsultas_dependientes: list[miniconsulta_sql],
                  miniconsultas_independientes: list[miniconsulta_sql],
@@ -214,6 +216,7 @@ class join_miniconsultas_sql:
                  lista_agregaciones: list[Expression] = []
                  ):
         
+        self.proyecciones = proyecciones
         self.condiciones_join = condiciones_join
         self.miniconsultas_dependientes = miniconsultas_dependientes
         self.miniconsultas_independientes = miniconsultas_independientes
@@ -225,12 +228,11 @@ class join_miniconsultas_sql:
         self.condiciones_having = condiciones_having
         self.lista_agregaciones = lista_agregaciones
 
-    
     def _juntar_resultados(self):
 
         # juntamos los resultados
         resultado_final = pd.DataFrame()
-
+        
         # Construimos un diccionario para buscar rapidamente las miniconsultas
         miniconsultas = {mc.alias : mc for mc in self.miniconsultas_independientes + self.miniconsultas_dependientes}
         hay_match = True
@@ -243,12 +245,9 @@ class join_miniconsultas_sql:
         resultado_final.columns = [f"{consulta_base.alias}.{columna.strip()}" for columna in resultado_final.columns]
 
         tablas_procesadas = [consulta_base.alias]
-        condiciones_por_procesar = type(self.condiciones_join)(self.condiciones_join
-                                                               )
+        condiciones_por_procesar = type(self.condiciones_join)(self.condiciones_join)
+
         while len(condiciones_por_procesar) != 0:
-            if hay_match == False:
-                resultado_final = pd.DataFrame()
-                break
 
             # Buscamos la siguiente condicion a procesar, Esta sera el que tenga alguna
             # tabla procesada en su condicion
@@ -298,21 +297,29 @@ class join_miniconsultas_sql:
                 # print(f'str(columna_en_resultados_agregar.this).strip() not in resultados_agregar.columns): {str(columna_en_resultados_agregar.this) not in resultados_agregar.columns}')
                 
                 hay_match = False
-                continue
+                break
             
             columnas_anteriores = list(resultado_final.columns)
             nuevas_columnas = [f"{columna_en_resultados_agregar.table}.{columna.strip()}" for columna in resultados_agregar.columns]
             resultado_final = resultado_final.merge(resultados_agregar, right_on=str(columna_en_resultados_agregar.this).strip(), left_on=str(columna_en_resultado_final).strip())
             resultado_final.columns = columnas_anteriores + nuevas_columnas       
             tablas_procesadas.append(str(columna_en_resultados_agregar.table))
-        self.resultado = resultado_final
-
+        
+        if hay_match == False:
+            self.resultado = pd.DataFrame()
+        else:
+            self.resultado = resultado_final
+        
     def _ordenar_resultados(self):
         columnas = []
         ascendente = []
 
         for datos_order_by in self.lista_order_by:
             tabla, columna, tipo = datos_order_by.values()
+            
+            if f"{tabla}.{columna}".strip() not in self.resultado.columns:
+                continue
+
             columnas.append(f"{tabla}.{columna}".strip())
             ascendente.append(tipo == "ASC")
 
@@ -372,7 +379,11 @@ class join_miniconsultas_sql:
 
                 continue
             
-            datos = datos.apply(self._procesar_cantidades)
+            try:
+                datos = datos.apply(self._procesar_cantidades)
+            except:
+                print(f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos')
+                continue
             
             if agregacion.key == "min":
                 columnas_resultado = len(resultado.columns)
@@ -415,15 +426,33 @@ class join_miniconsultas_sql:
         for mc in self.miniconsultas_dependientes:
             asyncio.run(mc.ejecutar())
 
-        
         self._juntar_resultados()
 
         if self.limite > 0:
             self.resultado = self.resultado.iloc[:self.limite]
         
-        self._ordenar_resultados()
-      
-        self._hacer_agregaciones()
+        if len(self.lista_order_by) != 0:
+            self._ordenar_resultados()
+
+        # Estamos suponiendo que si hay agregaciones en el select no hay proyecciones. Esto mientras no
+        # exista la opcion de group by
+        if len(self.lista_agregaciones) != 0:
+            self._hacer_agregaciones()
+        else:
+            estan_proyecciones = True
+            lista_proyecciones = []
+
+            for proyecciones in self.proyecciones.values():
+                lista_proyecciones += proyecciones
+
+            for proyeccion in lista_proyecciones:
+                if proyeccion.sql() not in self.resultado.columns:
+                    estan_proyecciones = False
+                    break
+            
+            if estan_proyecciones:
+                self.resultado = self.resultado[[proyeccion.sql() for proyeccion in lista_proyecciones]]
+    
 
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
@@ -468,7 +497,7 @@ class operacion_miniconsultas_sql:
     operacion: str
     parte_derecha: Union[miniconsulta_sql, join_miniconsultas_sql]
     parte_izquierda: Union[miniconsulta_sql, join_miniconsultas_sql, operacion_miniconsultas_sql]
-    restultado: pd.DataFrame
+    resultado: pd.DataFrame
 
     def __init__(self, 
                  operacion:str, 
@@ -478,9 +507,9 @@ class operacion_miniconsultas_sql:
         self.operacion = operacion
         self.parte_derecha = parte_derecha
         self.parte_izquierda = parte_izquierda
-        self.restultado = pd.DataFrame()
+        self.resultado = pd.DataFrame()
     
-    async def ejecutar(self):
+    def ejecutar(self):
         """
             Aqui es donde se hara la operacion usando los resultados
             de las miniconsultas.
@@ -489,20 +518,67 @@ class operacion_miniconsultas_sql:
             haber realizado todas las peticiones al LLM y las miniconsultas
             deben haber sido ejecutadas antes de ejecutar esta funcion
         """
-        self.parte_derecha.ejecutar
-        await self.parte_izquierda.ejecutar
+        self.parte_izquierda.ejecutar()
+        self.parte_derecha.ejecutar()
+        
+        print("Parte derecha: ")
+        print(self.parte_derecha.resultado)
+        print("")
+        print("Parte izquierda: ")
+        print(self.parte_izquierda.resultado)
+        print("")
 
         match self.operacion:
             case "union":
-                self.restultado = pd.concat([self.parte_izquierda.restultado, self.parte_derecha.resultado], ignore_index=True)
+                self.resultado = pd.concat([self.parte_izquierda.resultado, self.parte_derecha.resultado], ignore_index=True)
             case "intersect":
-                self.restultado = pd.merge(self.parte_izquierda.resultado, self.parte_derecha.resultado, how='inner')
-            case "except":
-                izq_tuplas: set[tuple] = set(self.parte_izquierda.resultado.apply(tuple, axis=1))
-                der_tuplas: set[tuple] = set(self.parte_derecha.resultado.apply(tuple, axis=1))
-                resultado_tuplas: set[tuple] = izq_tuplas - der_tuplas
-                self.restultado = pd.DataFrame(list(resultado_tuplas), columns=self.parte_izquierda.resultado.columns)
 
+                if self.parte_izquierda.resultado.empty:
+                    self.resultado = pd.DataFrame()
+                    return
+                
+                if self.parte_derecha.resultado.empty:
+                    self.resultado = self.parte_izquierda.resultado.copy()
+                    return
+
+                self.parte_izquierda.resultado['posicion'] = self.parte_izquierda.resultado.index
+                
+                columnas_izquierda = self.parte_izquierda.resultado.columns.to_list()
+                columnas_izquierda.remove('posicion')
+
+                interseccion: pd.DataFrame = pd.merge(self.parte_izquierda.resultado, 
+                                          self.parte_derecha.resultado,
+                                          left_on=columnas_izquierda,
+                                          right_on=self.parte_derecha.resultado.columns.to_list())
+                
+                self.resultado = self.parte_izquierda.resultado.iloc[interseccion['posicion'].to_list()]
+
+                self.parte_izquierda.resultado = self.parte_izquierda.resultado.drop(['posicion'], axis=1)
+                self.resultado = self.resultado.drop(['posicion'], axis=1)
+            
+            case "except":
+                if self.parte_izquierda.resultado.empty:
+                    self.resultado = pd.DataFrame()
+                    return
+                
+                if self.parte_derecha.resultado.empty:
+                    self.resultado = self.parte_izquierda.resultado.copy()
+                    return
+                
+                self.parte_izquierda.resultado['posicion'] = self.parte_izquierda.resultado.index
+                
+                columnas_izquierda = self.parte_izquierda.resultado.columns.to_list()
+                columnas_izquierda.remove('posicion')
+
+                interseccion: pd.DataFrame = pd.merge(self.parte_izquierda.resultado, 
+                                          self.parte_derecha.resultado,
+                                          left_on=columnas_izquierda,
+                                          right_on=self.parte_derecha.resultado.columns.to_list())
+                self.resultado = self.parte_izquierda.resultado.drop(axis='index', index=interseccion['posicion'].to_list())
+                
+                self.parte_izquierda.resultado = self.parte_izquierda.resultado.drop(['posicion'], axis=1)
+                self.resultado = self.resultado.drop(['posicion'], axis=1)
+                    
     def imprimir_datos(self, nivel: int) -> str:
         return f"""
 {nivel*'    '}CONSULTA OPERACION
@@ -560,7 +636,7 @@ class miniconsulta_sql_anidadas:
                       todas las condiciones anidadas dentro de la consulta
     """
 
-    proyecciones: dict[str, list[Expression]]
+    proyecciones: dict[str,Expression]
     agregaciones: list[Expression]
     aliases: list[str]
     tablas_aliases: dict[str, str]
@@ -576,7 +652,7 @@ class miniconsulta_sql_anidadas:
     subconsultas: list[dict[str, str | Expression]]
 
     def __init__(self, 
-                 proyecciones: list[Expression],
+                 proyecciones: dict[str,Expression],
                  agregaciones: list[Expression],
                  aliases: list[str],
                  tablas_aliases: dict[str, str],
@@ -588,6 +664,7 @@ class miniconsulta_sql_anidadas:
                  limite: int = -1,
                  lista_order_by: list[str] = [],
                  lista_group_by: list[dict[str,str]] = []) -> None:
+                
         self.proyecciones = proyecciones
         self.agregaciones = agregaciones
         self.aliases = aliases
@@ -601,12 +678,7 @@ class miniconsulta_sql_anidadas:
         self.lista_order_by = lista_order_by
         self.lista_group_by = lista_group_by
         self.subconsultas, self.condiciones = self.__obtener_subconsultas(condiciones)
-            
-    def __construir_miniconsulta(self, 
-                                 consulta_sql_ast: Expression) -> (miniconsulta_sql 
-                                                                   | join_miniconsultas_sql):
-        raise Exception("Por implementar!!!")
-    
+                
     def __obtener_subconsultas(self,
                                condiciones: list[Expression]) -> tuple[list[dict[str, str | Expression]], list[Expression]]:
     
@@ -648,11 +720,29 @@ class miniconsulta_sql_anidadas:
 
         return (consultas, [condiciones[i] for i in range(len(condiciones)) if i not in indices])
 
-    async def ejecutar(self):
-        for subconsulta in self.subconsultas:
-            await subconsulta['subconsulta'].ejecutar()
+    def crear_prompt(self):
+        import traduccion_sql_ln
 
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql_anidada(self)
+        proyecciones = traduccion_sql_ln.traducir_proyecciones(self.proyecciones[list(self.tablas_aliases.keys())[0]])
+        lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(self.condiciones)
+
+        return (traduccion, proyecciones, lista_columnas_condiciones)
+    
+    async def _ejecutar_aux(self, traduccion, columnas):
+        from ejecutar_LLM import hacer_consulta
+        self.resultado = await hacer_consulta(traduccion, columnas)
+
+    def ejecutar(self):
+
+        for subconsulta in self.subconsultas:
+            subconsulta['subconsulta'].ejecutar()
         
+        traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
+        self.status = STATUS[1]
+        columnas = proyecciones + [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+        asyncio.run(self._ejecutar_aux(traduccion, columnas))
+        self.status = STATUS[2]
 
     def imprimir_datos(self, nivel: int) -> str:
         proyecciones_imprimir = []
