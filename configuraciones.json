@@ -2,7 +2,7 @@
     "miniconsultas_status": ["En Espera", "Ejecutando", "Finalizado"],
     "miniconsultas_operaciones": ["except", "intersect", "union"],
     "miniconsultas_funciones_agregacion": ["avg", "count", "max", "min", "sum"],
-    "debug": false,
+    "debug": true,
     "EMBEDDINGS_MODEL": "thenlper/gte-large",
     "EMBEDDINGS_FOLDER": "emmbeddings_db",
     "EMBEDDINGS_INDEX": "indices_paises_wikis"

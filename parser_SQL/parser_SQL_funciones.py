@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Any
 from .parser_SQL_clases import *
 from sqlglot import Expression, column, parse_one
@@ -8,10 +7,8 @@ from sqlglot.expressions import In, Binary, Not, Subquery, Ordered
 configuraciones = json.load(open("./configuraciones.json"))
 OPERACIONES_CONJUNTOS = configuraciones['miniconsultas_operaciones']
 FUNCIONES_AGREGACION = configuraciones['miniconsultas_funciones_agregacion']
-DEBUG = configuraciones['debug']
 
-
-def obtener_tablas(consulta_sql_ast: Expression) -> tuple[list[str], dict[str,str]]:
+def obtener_tablas(consulta_sql_ast: Expression) -> tuple[list[str], dict[str, str]]:
     """
         Dada un ast de una consulta SQL de postgres obtiene todas las tablas 
         de la consulta. Esta función tiene en cuenta el from y los joins. 
@@ -29,46 +26,44 @@ def obtener_tablas(consulta_sql_ast: Expression) -> tuple[list[str], dict[str,st
             Un diccionario cuyos key son los alias de cada tabla y los 
             valores son el nombre original de la tabla
     """
-    
+
     tablas: list[str] = []
     tablas_alias: dict[str, str] = {}
 
-    
     if consulta_sql_ast.key != 'select':
         raise Exception('La consulta SQL necesita tener un "SELECT"')
 
     if consulta_sql_ast.args.get('from') == None:
         raise Exception('La consulta SQL necesita tener un "FORM"')
 
-    # Obtenemos la tabla que esta en el from   
+    # Obtenemos la tabla que esta en el from
     elementos_a_revisar = [consulta_sql_ast.args['from']]
 
     # Si tiene joins tenemos en cuenta esas tablas
     if consulta_sql_ast.args.get('joins') != None:
         elementos_a_revisar += consulta_sql_ast.args['joins']
-    
+
     # Conseguimos los nombres originales de las tablas y sus alias
-    # si es que tienen 
-    
+    # si es que tienen
+
     for elemento in elementos_a_revisar:
         if elemento.key == 'from' or elemento.key == 'join':
-            
+
             nombre_tabla = elemento.this.this.this
             alias_tabla = elemento.this.alias
-            
+
             if nombre_tabla not in tablas:
                 tablas.append(nombre_tabla)
 
             if alias_tabla != '':
                 tablas_alias[alias_tabla] = nombre_tabla
-    
-    if DEBUG: logging.info('Se obtuvieron todas las tablas y alias de tablas de la consulta')
-    
+
     return tablas, tablas_alias
 
-def obtener_proyecciones_agregaciones(consulta_sql_ast: Expression, 
-                                     tablas: list[str], 
-                                     tablas_alias: dict[str, str]) -> tuple[dict[str, list[column]], list[Expression]]:
+
+def obtener_proyecciones_agregaciones(consulta_sql_ast: Expression,
+                                      tablas: list[str],
+                                      tablas_alias: dict[str, str]) -> tuple[dict[str, list[column]], list[Expression]]:
     """
         Dada un ast de una consulta SQL de postgres obtiene todas las proyecciones y 
         funciones de agregación que hay en el SELECT de la consulta.
@@ -80,7 +75,7 @@ def obtener_proyecciones_agregaciones(consulta_sql_ast: Expression,
         --------------
         consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                           ast de una consulta SQL
-        
+
         tabla: Una lista con el nombre de todas las tablas de la consulta
 
         tablas_alias: Un diccionario cuyos key son los alias de cada tabla y los 
@@ -98,35 +93,36 @@ def obtener_proyecciones_agregaciones(consulta_sql_ast: Expression,
     agregaciones = []
 
     # Revisamos si la unica proyeccion es un *
-    if (len(consulta_sql_ast.args['expressions']) == 1 and 
-        consulta_sql_ast.args['expressions'][0].key == 'star'):
+    if (len(consulta_sql_ast.args['expressions']) == 1 and
+            consulta_sql_ast.args['expressions'][0].key == 'star'):
         raise Exception('Debe haber al menos una proyección en el Select')
-    
+
     for elemento_a_revisar in consulta_sql_ast.args['expressions']:
 
         if elemento_a_revisar.key in FUNCIONES_AGREGACION:
             parametro_de_agregacion = elemento_a_revisar.this
 
             if (parametro_de_agregacion.key == 'column' and
-                parametro_de_agregacion.table not in tablas and 
-                tablas_alias.get(parametro_de_agregacion.table) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{parametro_de_agregacion.table}"')
-            
+                parametro_de_agregacion.table not in tablas and
+                    tablas_alias.get(parametro_de_agregacion.table) == None):
+                raise Exception(
+                    f'No existe la tabla o alias de tabla "{parametro_de_agregacion.table}"')
+
             agregaciones.append(elemento_a_revisar)
-        
+
         elif elemento_a_revisar.key == 'column':
-            if (elemento_a_revisar.table not in tablas and 
-                tablas_alias.get(elemento_a_revisar.table) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{elemento_a_revisar.table}"')
-            
+            if (elemento_a_revisar.table not in tablas and
+                    tablas_alias.get(elemento_a_revisar.table) == None):
+                raise Exception(
+                    f'No existe la tabla o alias de tabla "{elemento_a_revisar.table}"')
+
             if proyecciones.get(elemento_a_revisar.table) == None:
                 proyecciones[elemento_a_revisar.table] = []
 
             proyecciones[elemento_a_revisar.table].append(elemento_a_revisar)
-    
-    if DEBUG: logging.info('Se obtuvieron proyecciones y funciones de agregación en el SELECT')
 
     return proyecciones, agregaciones
+
 
 def obtener_tablas_condiciones(condicion: Expression) -> tuple[str, str]:
     """
@@ -149,33 +145,32 @@ def obtener_tablas_condiciones(condicion: Expression) -> tuple[str, str]:
     if isinstance(condicion, Binary):
 
         nodo_izquierdo = condicion.this
-        
+
         if nodo_izquierdo.key == 'column':
             tabla_izquierda = nodo_izquierdo.table
-        
+
         nodo_derecho = condicion.args['expression']
-        
+
         if nodo_derecho.key == 'column':
             tabla_derecha = nodo_derecho.table
 
     # caso en el que estamos trabajando con un NOT IN
-    elif isinstance(condicion, Not) and isinstance(condicion.this,In):
+    elif isinstance(condicion, Not) and isinstance(condicion.this, In):
 
         nodo_izquierdo = condicion.this.this
-        
+
         if nodo_izquierdo.key == 'column':
             tabla_izquierda = nodo_izquierdo.table
-    
+
     elif isinstance(condicion, In):
 
         nodo_izquierdo = condicion.this
-        
+
         if nodo_izquierdo.key == 'column':
             tabla_izquierda = nodo_izquierdo.table
-    
-    if DEBUG: logging.info('Se obtuvo las tablas relacionadas con la condicion %s', condicion.sql())
-    
+
     return tabla_izquierda, tabla_derecha
+
 
 def obtener_condiciones(conector_inicial: Expression, tipo_conectores: str = 'and') -> list[Expression]:
     """
@@ -203,7 +198,7 @@ def obtener_condiciones(conector_inicial: Expression, tipo_conectores: str = 'an
     # Y obtenemos todas las condiciones
     while conectores != []:
         conector_actual = conectores.pop(0)
-        
+
         # Caso base
         if conector_actual.key != tipo_conectores:
             condiciones.append(conector_actual)
@@ -214,12 +209,13 @@ def obtener_condiciones(conector_inicial: Expression, tipo_conectores: str = 'an
             condiciones.append(conector_actual.this)
         else:
             conectores.append(conector_actual.this)
-        
+
         # Agregamos la parte derecha del and
         if conector_actual.args['expression'].key != tipo_conectores:
             condiciones.append(conector_actual.args['expression'])
-    
+
     return condiciones
+
 
 def obtener_condiciones_where(consulta_sql_ast: Expression) -> dict[list[Expression], dict[str, list[Expression]]]:
     """
@@ -245,64 +241,64 @@ def obtener_condiciones_where(consulta_sql_ast: Expression) -> dict[list[Express
     # Obtenemos todas las condiciones
     # Ten en cuenta que el and asocia a izquierda esta vez
     if consulta_sql_ast.args.get('where') == None:
-         raise Exception(f'La consulta debe tener un WHERE. la consulta es: \n {consulta_sql_ast.sql()}')
+        raise Exception(
+            f'La consulta debe tener un WHERE. la consulta es: \n {consulta_sql_ast.sql()}')
 
-    condiciones_totales = obtener_condiciones(consulta_sql_ast.args['where'].this)
+    condiciones_totales = obtener_condiciones(
+        consulta_sql_ast.args['where'].this)
 
     condiciones_or = []
     condiciones = []
 
     for i in range(len(condiciones_totales)):
-            if condiciones_totales[i].key == 'or' or (condiciones_totales[i].key == 'paren' and condiciones_totales[i].this.key == 'or'):
-                condiciones_or.append(condiciones_totales[i])
-            else:
-                condiciones.append(condiciones_totales[i])
-
-    if DEBUG: logging.info('Se obtuvieron todas las condiciones del WHERE en la consulta')
+        if condiciones_totales[i].key == 'or' or (condiciones_totales[i].key == 'paren' and condiciones_totales[i].this.key == 'or'):
+            condiciones_or.append(condiciones_totales[i])
+        else:
+            condiciones.append(condiciones_totales[i])
 
     return {'condiciones': condiciones, 'condiciones or': condiciones_or}
 
+
 def obtener_condiciones_having(consulta_sql_ast: Expression) -> dict[str, list[Expression]]:
-     """
-        Dada un ast de una consulta SQL de postgres obtiene todas las condiciones
-        del HAVING de la consulta
-
-        Tenga en cuenta que esta funcion espera que en el HAVING solo hayan operadores
-        AND.
-
-        Si hay condiciones de OR deben estar entre parentesis, los conectores principales
-        deben ser ANDs
-
-        Parametros
-        --------------
-        consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
-                          ast de una consulta SQL
-
-        Retorna
-        --------------
-            Una lista con todas las condiciones del HAVING
     """
-     
-     # Obtenemos todas las condiciones
-     # Ten en cuenta que el and asocia a izquierda esta vez
-     if consulta_sql_ast.args.get('having') == None:
-          raise Exception('La consulta debe tener un HAVING')
+       Dada un ast de una consulta SQL de postgres obtiene todas las condiciones
+       del HAVING de la consulta
 
-     condiciones = obtener_condiciones(consulta_sql_ast.args['having'].this)
+       Tenga en cuenta que esta funcion espera que en el HAVING solo hayan operadores
+       AND.
 
-     condiciones_or = []
+       Si hay condiciones de OR deben estar entre parentesis, los conectores principales
+       deben ser ANDs
 
-     for i in range(len(condiciones)):
-          if condiciones[i].key == 'or':
-               condiciones_or.append(condiciones.pop(i))
+       Parametros
+       --------------
+       consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
+                         ast de una consulta SQL
 
-     if DEBUG: logging.info('Se obtuvieron todas condiciones del HAVING de la consulta')
+       Retorna
+       --------------
+           Una lista con todas las condiciones del HAVING
+   """
 
-     return {'condiciones': condiciones, 'condiciones or': condiciones_or}   
+    # Obtenemos todas las condiciones
+    # Ten en cuenta que el and asocia a izquierda esta vez
+    if consulta_sql_ast.args.get('having') == None:
+        raise Exception('La consulta debe tener un HAVING')
+
+    condiciones = obtener_condiciones(consulta_sql_ast.args['having'].this)
+
+    condiciones_or = []
+
+    for i in range(len(condiciones)):
+        if condiciones[i].key == 'or':
+            condiciones_or.append(condiciones.pop(i))
+
+    return {'condiciones': condiciones, 'condiciones or': condiciones_or}
+
 
 def clasificar_condiciones_where(condiciones: list[Expression],
-                           tablas: list[str], 
-                           tablas_alias: dict[str, str]) -> dict[str, list[Expression]]:
+                                 tablas: list[str],
+                                 tablas_alias: dict[str, str]) -> dict[str, list[Expression]]:
     """
         Toma una lista de condiciones, una lista de tablas y un diccionario con los
         alises de las tablas. Clasifica cada condicion dependiendo de la tabla 
@@ -323,49 +319,50 @@ def clasificar_condiciones_where(condiciones: list[Expression],
             esta relacionado una o varias condicones en el WHERE. Y los valores
             son una lista de dichas condiciones.
     """
-        
-    # Si una condicion depende de dos tablas lo clasificaremos con la tabla de la 
+
+    # Si una condicion depende de dos tablas lo clasificaremos con la tabla de la
     # izquierda
     condiciones_por_tablas = {}
     for condicion in condiciones:
         tabla_izquierda, tabla_derecha = obtener_tablas_condiciones(condicion)
-        
+
         if tabla_derecha == '' and tabla_izquierda == '':
             raise Exception(f'La condicion {condicion} no es valida')
-        
+
         # verificamos que las tablas del lado izquierdo y derecho existan
         if (tabla_izquierda != '' and
-            tabla_izquierda not in tablas and 
-            tablas_alias.get(tabla_izquierda) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{tabla_izquierda}"')
+            tabla_izquierda not in tablas and
+                tablas_alias.get(tabla_izquierda) == None):
+            raise Exception(
+                f'No existe la tabla o alias de tabla "{tabla_izquierda}"')
 
         if (tabla_derecha != '' and
-            tabla_derecha not in tablas and 
-            tablas_alias.get(tabla_derecha) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{tabla_derecha}"')
-    
+            tabla_derecha not in tablas and
+                tablas_alias.get(tabla_derecha) == None):
+            raise Exception(
+                f'No existe la tabla o alias de tabla "{tabla_derecha}"')
+
         if tabla_izquierda != '':
             if condiciones_por_tablas.get(tabla_izquierda) == None:
                 condiciones_por_tablas[tabla_izquierda] = []
-            
+
             condiciones_por_tablas[tabla_izquierda].append(condicion)
             continue
-        
+
         if tabla_derecha != '':
             if condiciones_por_tablas.get(tabla_derecha) == None:
                 condiciones_por_tablas[tabla_derecha] = []
-            
+
             condiciones_por_tablas[tabla_derecha].append(condicion)
-            continue 
-        
-    if DEBUG: logging.info('Se clasificaron las condiciones de la consulta')
-    
+            continue
+
     return condiciones_por_tablas
 
-def obtener_condiciones_joins(consulta_sql_ast: Expression, 
-                              tablas: list[str], 
+
+def obtener_condiciones_joins(consulta_sql_ast: Expression,
+                              tablas: list[str],
                               tablas_alias: dict[str, str],
-                              condiciones:dict[str, Expression])-> dict[str, list[Expression]]:
+                              condiciones: dict[str, Expression]) -> dict[str, list[Expression]]:
     """
         Dada un ast de una consulta SQL de postgres obtiene todas las condiciones
         de los distintos JOINs
@@ -388,7 +385,7 @@ def obtener_condiciones_joins(consulta_sql_ast: Expression,
         --------------
         consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                           ast de una consulta SQL
-        
+
         tabla: Una lista con el nombre de todas las tablas de la consulta
 
         tablas_alias: Un diccionario cuyos key son los alias de cada tabla y los 
@@ -404,51 +401,57 @@ def obtener_condiciones_joins(consulta_sql_ast: Expression,
             esta relacionado una o varias condiciones en los JOINs. Y los valores
             son una lista de dichas condiciones.
     """
-    
+
     elementos_a_revisar = []
 
     if consulta_sql_ast.args.get('joins') != None:
         elementos_a_revisar = consulta_sql_ast.args['joins']
-    
+
     condiciones_joins = []
     for elemento in elementos_a_revisar:
         if elemento.args.get('on') == None:
             raise Exception('Todo JOIN debe tener un ON')
-        
+
         condiciones_joins.append(elemento.args['on'])
-    
+
     condiciones_por_tablas = {}
-    
+
     for condicion in condiciones_joins:
         for nodo in [condicion.this, condicion.args['expression']]:
             if nodo.key != 'column':
-                raise Exception(f'La condicion de JOIN {condicion} debe involucrar dos tablas')
-                        
+                raise Exception(
+                    f'La condicion de JOIN {condicion} debe involucrar dos tablas')
+
             if nodo.table == '':
                 raise Exception(f'La condicion {condicion} no es valida')
-            
-            if (nodo.table not in tablas and 
-                tablas_alias.get(nodo.table) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{nodo.table}"')
+
+            if (nodo.table not in tablas and
+                    tablas_alias.get(nodo.table) == None):
+                raise Exception(
+                    f'No existe la tabla o alias de tabla "{nodo.table}"')
 
         # Calculamos cuantas condiciones estan relacionada con cada una de las tablas
-        # que estan involucaradas en la condicion        
-        
+        # que estan involucaradas en la condicion
+
         numero_condiciones_tabla_izquierda = 0
         if condiciones.get(condicion.this.table) != None:
-            numero_condiciones_tabla_izquierda += len(condiciones[condicion.this.table])
-            
+            numero_condiciones_tabla_izquierda += len(
+                condiciones[condicion.this.table])
+
         if condiciones_por_tablas.get(condicion.this.table) != None:
-            numero_condiciones_tabla_izquierda += len(condiciones_por_tablas[condicion.this.table])
+            numero_condiciones_tabla_izquierda += len(
+                condiciones_por_tablas[condicion.this.table])
 
         numero_condiciones_tabla_derecha = 0
         if condiciones.get(condicion.args['expression'].table) != None:
-            numero_condiciones_tabla_derecha += len(condiciones[condicion.args['expression'].table])
-        
-        if condiciones_por_tablas.get(condicion.args['expression'].table) != None:
-            numero_condiciones_tabla_derecha += len(condiciones_por_tablas[condicion.args['expression'].table])
+            numero_condiciones_tabla_derecha += len(
+                condiciones[condicion.args['expression'].table])
 
-        # Le añadimos la condicion a la tabla que tenga menos condiciones, para asi 
+        if condiciones_por_tablas.get(condicion.args['expression'].table) != None:
+            numero_condiciones_tabla_derecha += len(
+                condiciones_por_tablas[condicion.args['expression'].table])
+
+        # Le añadimos la condicion a la tabla que tenga menos condiciones, para asi
         # acotar mas el dominio de la consulta
 
         if numero_condiciones_tabla_izquierda < numero_condiciones_tabla_derecha:
@@ -460,13 +463,15 @@ def obtener_condiciones_joins(consulta_sql_ast: Expression,
             if condiciones_por_tablas.get(condicion.args['expression'].table) == None:
                 condiciones_por_tablas[condicion.args['expression'].table] = []
 
-            condiciones_por_tablas[condicion.args['expression'].table].append(condicion)
-    if DEBUG: logging.info('Se obtuvieron todas las condiciones en los ON de los JOIN en la consulta')
+            condiciones_por_tablas[condicion.args['expression'].table].append(
+                condicion)
+
     return condiciones_por_tablas
 
-def obtener_tablas_joins(consulta_sql_ast: Expression, 
-                               tablas: list[str], 
-                               tablas_alias: dict[str, str]) -> dict[str, list[Expression]]:
+
+def obtener_tablas_joins(consulta_sql_ast: Expression,
+                         tablas: list[str],
+                         tablas_alias: dict[str, str]) -> dict[str, list[Expression]]:
     """
         Dada un ast de una consulta SQL de postgres obtiene todas las condiciones
         de los distintos JOINs y devuelve las columnas de las tablas utilizadas
@@ -476,7 +481,7 @@ def obtener_tablas_joins(consulta_sql_ast: Expression,
         ------------
         consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                           ast de una consulta SQL
-        
+
         tabla: Una lista con el nombre de todas las tablas de la consulta
 
         tablas_alias: Un diccionario cuyos key son los alias de cada tabla y los 
@@ -494,41 +499,42 @@ def obtener_tablas_joins(consulta_sql_ast: Expression,
 
     if consulta_sql_ast.args.get('joins') != None:
         elementos_a_revisar = consulta_sql_ast.args['joins']
-    
+
     condiciones_joins = []
     for elemento in elementos_a_revisar:
         if elemento.args.get('on') == None:
             raise Exception('Todo JOIN debe tener un ON')
-        
+
         condiciones_joins.append(elemento.args['on'])
-    
+
     proyecciones_por_tablas = {}
-    
+
     for condicion in condiciones_joins:
         for nodo in [condicion.this, condicion.args['expression']]:
             if nodo.key != 'column':
-                raise Exception(f'La condicion de JOIN {condicion} debe involucrar dos tablas')
-                        
+                raise Exception(
+                    f'La condicion de JOIN {condicion} debe involucrar dos tablas')
+
             if nodo.table == '':
                 raise Exception(f'La condicion {condicion} no es valida')
-            
-            if (nodo.table not in tablas and 
-                tablas_alias.get(nodo.table) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{nodo.table}"')
-            
+
+            if (nodo.table not in tablas and
+                    tablas_alias.get(nodo.table) == None):
+                raise Exception(
+                    f'No existe la tabla o alias de tabla "{nodo.table}"')
+
             tabla = nodo.table
 
             if proyecciones_por_tablas.get(tabla) == None:
                 proyecciones_por_tablas[tabla] = []
-            
+
             if nodo not in proyecciones_por_tablas[tabla]:
                 proyecciones_por_tablas[tabla].append(nodo)
-    
-    if DEBUG: logging.info('Se repartieron las condiciones de JOINS para las tablas')
-    
+
     return proyecciones_por_tablas
 
-def obtener_dependencia(tabla:str, condiciones: list[Expression]):
+
+def obtener_dependencia(tabla: str, condiciones: list[Expression]):
     """
         Dada una tabla y una lista de condiciones revisa si existe 
         alguna condicion donde se relacione a esta tabla con otra. Lo
@@ -547,10 +553,10 @@ def obtener_dependencia(tabla:str, condiciones: list[Expression]):
         ------------
         tabla: Un string que el alias (o nombre original) de la tabla la cual 
                se quiere verificar si depende de otra.
-        
+
         condiciones: Una lista de expresiones de sqlglot. Estas expresiones 
                      representan condiciones
-        
+
         Retorna
         ---------
 
@@ -562,10 +568,11 @@ def obtener_dependencia(tabla:str, condiciones: list[Expression]):
         for nodo in [condicion.this, condicion.args['expression']]:
             if nodo.key == 'column' and nodo.table != tabla:
                 dependencia = nodo.table
-            
+
     return dependencia
 
-def obtener_group_by(consulta_sql_ast:Expression) -> list[dict[str, str]]:
+
+def obtener_group_by(consulta_sql_ast: Expression) -> list[dict[str, str]]:
     """
     Dada un ast de una consulta SQL de postgres el cual tiene uno GROUP BY
     obtiene todas las columnas necesarias para realizar la agrupacion
@@ -575,23 +582,22 @@ def obtener_group_by(consulta_sql_ast:Expression) -> list[dict[str, str]]:
 
     consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                       ast de una consulta SQL
-    
+
     Retorna
     ------------
-    
+
     Una lista de diccionarios que almacenan las tablas y columnas necesarias 
     para realizar la agrupacion
     """
     if consulta_sql_ast.args.get('group') == None:
         raise Exception('La consulta SQL debe tener un group by')
-    
+
     group_by_ast = consulta_sql_ast.args['group']
 
-    if DEBUG: logging.info('Se obtuvo el GROUP BY de la consulta')
+    return [{'tabla': i.args['table'].this, 'columna': i.args['this'].this} for i in group_by_ast.args['expressions']]
 
-    return [ {'tabla': i.args['table'].this, 'columna': i.args['this'].this} for i in group_by_ast.args['expressions']]
 
-def obtener_order_by(consulta_sql_ast: Expression)-> list[dict[str, str]]:
+def obtener_order_by(consulta_sql_ast: Expression) -> list[dict[str, str]]:
     """
         Dada una consulta QSL, extrae la instruccion ORDER BY que indica el 
         orden solicitado para mostrar los registros a devolver en la consulta.
@@ -600,7 +606,7 @@ def obtener_order_by(consulta_sql_ast: Expression)-> list[dict[str, str]]:
         -----------
         consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                           ast de una consulta SQL
-        
+
         retorna
         --------
             Una lista de diccionarios que indican las propiedades del orden
@@ -608,14 +614,14 @@ def obtener_order_by(consulta_sql_ast: Expression)-> list[dict[str, str]]:
     """
     if consulta_sql_ast.args.get('order') == None:
         raise Exception('La consulta SQL debe tener un order by')
-    
-    ordenes: list[Ordered] = consulta_sql_ast.args.get('order').args.get('expressions')
 
-    if DEBUG: logging.info('Se obtuvo el ORDER BY de la consulta')
+    ordenes: list[Ordered] = consulta_sql_ast.args.get(
+        'order').args.get('expressions')
 
-    return [ {'tabla': i.this.table, 
-              'columna': i.this.this.this,
-              'tipo': "DESC" if (i.args.get('desc') or i.args.get('desc') is None) else "ASC" } for i in ordenes if i is not None ]
+    return [{'tabla': i.this.table,
+             'columna': i.this.this.this,
+             'tipo': "DESC" if (i.args.get('desc') or i.args.get('desc') is None) else "ASC"} for i in ordenes if i is not None]
+
 
 def obtener_limit(consulta_sql_ast: Expression) -> int:
     """
@@ -626,15 +632,14 @@ def obtener_limit(consulta_sql_ast: Expression) -> int:
         -----------
         consulta_sql_ast: Un objeto Expression de sqlglot. Representa un 
                           ast de una consulta SQL
-        
+
         retorna
         --------
             Una entero que indica el limite
     """
 
-    if DEBUG: logging.info('Se obtuvo el limit de la consulta')
-
     return int(str(consulta_sql_ast.args.get('limit').args.get('expression')))
+
 
 def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
     """
@@ -655,10 +660,11 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
         son otros diccionarios cuya claves son el nombre de la informacion de esa tabla
         y los valores son la informacion necesaria.
     """
-        
+
     tablas, tablas_alias = obtener_tablas(consulta_sql_ast)
-    
-    proyecciones, agregaciones = obtener_proyecciones_agregaciones(consulta_sql_ast, tablas, tablas_alias)
+
+    proyecciones, agregaciones = obtener_proyecciones_agregaciones(
+        consulta_sql_ast, tablas, tablas_alias)
 
     # Pasamos por todas las funciones de agregación y si trabajan sobre una columna de alguna tabla
     # la agregamos a las proyecciones
@@ -667,27 +673,30 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
         if agregacion.this.key == "column":
             tabla = agregacion.this.args['table'].this
 
-            if (tabla not in tablas and 
-                tablas_alias.get(tabla) == None):
-                raise Exception(f'No existe la tabla o alias de tabla "{tabla}"')
+            if (tabla not in tablas and
+                    tablas_alias.get(tabla) == None):
+                raise Exception(
+                    f'No existe la tabla o alias de tabla "{tabla}"')
 
             if proyecciones.get(tabla) == None:
                 proyecciones[tabla] = []
 
             if agregacion.this not in proyecciones[tabla]:
-                proyecciones[tabla].append(agregacion.this) 
-    
-    condiciones, condiciones_or = obtener_condiciones_where(consulta_sql_ast).values()
-    condiciones_por_tablas = clasificar_condiciones_where(condiciones, tablas, tablas_alias)
-    
+                proyecciones[tabla].append(agregacion.this)
+
+    condiciones, condiciones_or = obtener_condiciones_where(
+        consulta_sql_ast).values()
+    condiciones_por_tablas = clasificar_condiciones_where(
+        condiciones, tablas, tablas_alias)
+
     condiciones_or_mantener = []
-    
+
     for condicion_or in condiciones_or:
         mover = True
         tabla = None
-        
+
         condicion_or_sin_parentesis = condicion_or
-        
+
         if condicion_or_sin_parentesis.key == 'paren':
             condicion_or_sin_parentesis = condicion_or_sin_parentesis.this
 
@@ -697,7 +706,7 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
             if tabla_1 == '' and tabla_2 == '':
                 mover = False
                 break
-            
+
             if tabla_1 != '' and tabla_2 != '' and tabla_1 != tabla_2:
                 mover = False
                 break
@@ -706,7 +715,7 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
                 if tabla_1 != '':
                     tabla = tabla_1
                     continue
-                
+
                 if tabla_2 != '':
                     tabla = tabla_2
             else:
@@ -717,42 +726,46 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
                 if tabla_2 != '' and tabla_2 != tabla:
                     mover = False
                     break
-        
+
         if mover and tabla != None:
             if condiciones_por_tablas.get(tabla) == None:
                 condiciones_por_tablas[tabla] = []
-            
+
             condiciones_por_tablas[tabla].append(condicion_or)
         else:
             condiciones_or_mantener.append(condicion_or)
-        
+
     condiciones_or = condiciones_or_mantener
 
     condiciones_having = []
-    
-    condiciones_having_or = []
-    
-    if consulta_sql_ast.args.get('having') != None:
-        condiciones_having, condiciones_having_or = obtener_condiciones_having(consulta_sql_ast).values()
 
-    condiciones_joins_por_tablas = obtener_condiciones_joins(consulta_sql_ast, tablas, tablas_alias, condiciones_por_tablas)
-    
-    proyecciones_joins = obtener_tablas_joins(consulta_sql_ast, tablas, tablas_alias)
+    condiciones_having_or = []
+
+    if consulta_sql_ast.args.get('having') != None:
+        condiciones_having, condiciones_having_or = obtener_condiciones_having(
+            consulta_sql_ast).values()
+
+    condiciones_joins_por_tablas = obtener_condiciones_joins(
+        consulta_sql_ast, tablas, tablas_alias, condiciones_por_tablas)
+
+    proyecciones_joins = obtener_tablas_joins(
+        consulta_sql_ast, tablas, tablas_alias)
 
     aliases = tablas_alias.keys()
 
     datos_miniconsultas = {}
     for alias in aliases:
         datos_miniconsultas[alias] = {'tabla': tablas_alias[alias]}
-        
+
         if proyecciones.get(alias) != None:
             datos_miniconsultas[alias]['proyecciones'] = proyecciones[alias]
-        else: 
+        else:
             datos_miniconsultas[alias]['proyecciones'] = []
-        
+
         if proyecciones_joins.get(alias) != None:
-            datos_miniconsultas[alias]['proyecciones'] += [i for i in proyecciones_joins[alias] if i not in datos_miniconsultas[alias]['proyecciones']]
-        
+            datos_miniconsultas[alias]['proyecciones'] += [i for i in proyecciones_joins[alias]
+                                                           if i not in datos_miniconsultas[alias]['proyecciones']]
+
         if condiciones_por_tablas.get(alias) != None:
             datos_miniconsultas[alias]['condiciones'] = condiciones_por_tablas[alias]
         else:
@@ -763,28 +776,29 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
         else:
             datos_miniconsultas[alias]['condiciones_joins'] = []
 
-    resultado = {'datos miniconsultas': datos_miniconsultas, 
+    resultado = {'datos miniconsultas': datos_miniconsultas,
                  'datos globales': {'proyecciones': proyecciones,
                                     'agregaciones': agregaciones,
                                     'order by': [],
                                     'limite': -1,
                                     'group by': [],
                                     'condiciones or': condiciones_or,
-                                    'condiciones having': condiciones_having, 
+                                    'condiciones having': condiciones_having,
                                     'condiciones having or': condiciones_having_or}}
-    
+
     if consulta_sql_ast.args.get('order') != None:
-        resultado['datos globales']['order by'] = obtener_order_by(consulta_sql_ast)
-    
+        resultado['datos globales']['order by'] = obtener_order_by(
+            consulta_sql_ast)
+
     if consulta_sql_ast.args.get('group') != None:
-        resultado['datos globales']['group by'] = obtener_group_by(consulta_sql_ast)
+        resultado['datos globales']['group by'] = obtener_group_by(
+            consulta_sql_ast)
 
     if consulta_sql_ast.args.get('limit') != None:
         resultado['datos globales']['limite'] = obtener_limit(consulta_sql_ast)
 
-    if DEBUG: logging.info('Se termino de dividir la consulta')
-
     return resultado
+
 
 def obtener_miniconsultas_join(consulta_sql_ast: Expression) -> dict[str, list[miniconsulta_sql]]:
     """
@@ -804,65 +818,69 @@ def obtener_miniconsultas_join(consulta_sql_ast: Expression) -> dict[str, list[m
         Un diccionario con las miniconsultas que son dependientes (necesitan del 
         resultado de otra miniconsulta) y las independientes.
     """
-    if DEBUG: logging.info('La consulta tiene 0 o mas JOINS, se procede a dividir la consulta')
 
     datos_divididos_joins = dividir_joins(consulta_sql_ast)
     datos_miniconsultas = datos_divididos_joins['datos miniconsultas']
     datos_globales = datos_divididos_joins['datos globales']
     dependencias = {}
-    
+
     aliases = datos_miniconsultas.keys()
-    
+
     miniconsultas_independientes = {}
     miniconsultas_dependientes = {}
-    
+
     for alias in aliases:
-        dependencia = obtener_dependencia(alias, datos_miniconsultas[alias]['condiciones_joins'])
+        dependencia = obtener_dependencia(
+            alias, datos_miniconsultas[alias]['condiciones_joins'])
 
         if dependencia != '':
             dependencias[alias] = dependencia
-            miniconsultas_dependientes[alias] = miniconsulta_sql(tabla = datos_miniconsultas[alias]['tabla'], 
-                                                                 alias = alias,
-                                                                 proyecciones = datos_miniconsultas[alias]['proyecciones'], 
-                                                                 condiciones = datos_miniconsultas[alias]['condiciones'],
-                                                                 condiciones_join = datos_miniconsultas[alias]['condiciones_joins'])
+            miniconsultas_dependientes[alias] = miniconsulta_sql(tabla=datos_miniconsultas[alias]['tabla'],
+                                                                 alias=alias,
+                                                                 proyecciones=datos_miniconsultas[alias]['proyecciones'],
+                                                                 condiciones=datos_miniconsultas[alias]['condiciones'],
+                                                                 condiciones_join=datos_miniconsultas[alias]['condiciones_joins'])
         else:
-            miniconsultas_independientes[alias] = miniconsulta_sql(tabla = datos_miniconsultas[alias]['tabla'], 
-                                                                  alias = alias,
-                                                                  proyecciones = datos_miniconsultas[alias]['proyecciones'], 
-                                                                  condiciones = datos_miniconsultas[alias]['condiciones'],
-                                                                  condiciones_join = datos_miniconsultas[alias]['condiciones_joins'])
+            miniconsultas_independientes[alias] = miniconsulta_sql(tabla=datos_miniconsultas[alias]['tabla'],
+                                                                   alias=alias,
+                                                                   proyecciones=datos_miniconsultas[
+                                                                       alias]['proyecciones'],
+                                                                   condiciones=datos_miniconsultas[alias]['condiciones'],
+                                                                   condiciones_join=datos_miniconsultas[alias]['condiciones_joins'])
 
     for alias, dependencia_mc in dependencias.items():
         if miniconsultas_independientes.get(dependencia_mc) != None:
             dependencia = miniconsultas_independientes[dependencia_mc]
         else:
             dependencia = miniconsultas_dependientes[dependencia_mc]
-        
+
         if len(miniconsultas_dependientes[alias].dependencias) == 0:
             miniconsultas_dependientes[alias].dependencias = [dependencia]
         else:
             miniconsultas_dependientes[alias].dependencias.append(dependencia)
-    
+
     lista_condiciones_join = []
     for miniconsulta in list(miniconsultas_dependientes.values()) + list(miniconsultas_independientes.values()):
         lista_condiciones_join += miniconsulta.condiciones_join
 
     return {'ejecutor': join_miniconsultas_sql(proyecciones=datos_globales['proyecciones'],
-                                               condiciones_join = lista_condiciones_join,
-                                               miniconsultas_dependientes = list(miniconsultas_dependientes.values()), 
-                                               miniconsultas_independientes = list(miniconsultas_independientes.values()),
-                                               lista_group_by = datos_globales['group by'],
-                                               lista_order_by = datos_globales['order by'],
-                                               limite = datos_globales['limite'],
-                                               condiciones_or = datos_globales['condiciones or'],
-                                               condiciones_having = datos_globales['condiciones having'],
-                                               condiciones_having_or = datos_globales['condiciones having or'],
-                                               lista_agregaciones = datos_globales['agregaciones']),
-            'dependientes': list(miniconsultas_dependientes.values()), 
+                                               condiciones_join=lista_condiciones_join,
+                                               miniconsultas_dependientes=list(
+                                                   miniconsultas_dependientes.values()),
+                                               miniconsultas_independientes=list(
+                                                   miniconsultas_independientes.values()),
+                                               lista_group_by=datos_globales['group by'],
+                                               lista_order_by=datos_globales['order by'],
+                                               limite=datos_globales['limite'],
+                                               condiciones_or=datos_globales['condiciones or'],
+                                               condiciones_having=datos_globales['condiciones having'],
+                                               condiciones_having_or=datos_globales['condiciones having or'],
+                                               lista_agregaciones=datos_globales['agregaciones']),
+            'dependientes': list(miniconsultas_dependientes.values()),
             'independientes': list(miniconsultas_independientes.values())}
 
-def obtener_miniconsultas_operacion(consulta_sql_ast:Expression) -> dict[str, list[miniconsulta_sql]]:
+
+def obtener_miniconsultas_operacion(consulta_sql_ast: Expression) -> dict[str, list[miniconsulta_sql]]:
     """
         Dada un ast de una consulta SQL de postgres con una o mas operaciones de conjuntos, lo divide  
         en consultas mas simples de forma tal que despues se pueda usar la  
@@ -871,7 +889,7 @@ def obtener_miniconsultas_operacion(consulta_sql_ast:Expression) -> dict[str, li
 
         Ten en cuenta que sqlglot asocia a 'izquierda' o mejor dicho asocia 
         hacia arriba
-        
+
         Parametros
         -----------------
 
@@ -885,22 +903,26 @@ def obtener_miniconsultas_operacion(consulta_sql_ast:Expression) -> dict[str, li
         resultado de otra miniconsulta) y las independientes.
     """
     if consulta_sql_ast.key not in OPERACIONES_CONJUNTOS:
-        raise Exception("Para ejecutar esta funcion la consulta SQL debe tener al menos una operacion")
-    
+        raise Exception(
+            "Para ejecutar esta funcion la consulta SQL debe tener al menos una operacion")
+
     # la parte derecha de una operacion siempre sera una consulta que no es una operacion
-    if DEBUG: logging.info('La consulta es una operación de conjuntos, se procede a parsear las consultas relacionada con esta operacion')
 
-    miniconsultas_derecha =  obtener_miniconsultas(consulta_sql_ast.args['expression'].sql())
+    miniconsultas_derecha = obtener_miniconsultas(
+        consulta_sql_ast.args['expression'].sql())
 
-    miniconsultas_izquierda = obtener_miniconsultas(consulta_sql_ast.this.sql())
+    miniconsultas_izquierda = obtener_miniconsultas(
+        consulta_sql_ast.this.sql())
 
-    miniconsultas_totales = {'dependientes': miniconsultas_izquierda['dependientes'] + miniconsultas_derecha['dependientes'], 
+    miniconsultas_totales = {'dependientes': miniconsultas_izquierda['dependientes'] + miniconsultas_derecha['dependientes'],
                              'independientes': miniconsultas_izquierda['independientes'] + miniconsultas_derecha['independientes']}
 
-    miniconsultas_totales['ejecutor'] = operacion_miniconsultas_sql(consulta_sql_ast.key, miniconsultas_derecha['ejecutor'], miniconsultas_izquierda['ejecutor'])
+    miniconsultas_totales['ejecutor'] = operacion_miniconsultas_sql(
+        consulta_sql_ast.key, miniconsultas_derecha['ejecutor'], miniconsultas_izquierda['ejecutor'])
     return miniconsultas_totales
 
-def obtener_miniconsultas(consulta_sql: str)-> dict[str, list[miniconsulta_sql]]:
+
+def obtener_miniconsultas(consulta_sql: str) -> dict[str, list[miniconsulta_sql]]:
     """
         Divide una consulta SQL en miniconsultas de menor complejidad
         y devuelve una lista con las distintas miniconsultas a ejecutar
@@ -926,16 +948,17 @@ def obtener_miniconsultas(consulta_sql: str)-> dict[str, list[miniconsulta_sql]]
     for condicion in condiciones:
         if (isinstance(condicion, In) or
             isinstance(condicion, Not) or
-            isinstance(condicion, Binary) and isinstance(condicion.this, Subquery) or 
-            isinstance(condicion, Binary) and isinstance(condicion.args.get('expression'), Subquery)):
+            isinstance(condicion, Binary) and isinstance(condicion.this, Subquery) or
+                isinstance(condicion, Binary) and isinstance(condicion.args.get('expression'), Subquery)):
             return obtener_miniconsultas_anidadas(consulta_sql_ast)
-        
-#           
+
+#
     # Caso donde la consulta es un select sin condicion IN
     if consulta_sql_ast.key == 'select':
         return obtener_miniconsultas_join(consulta_sql_ast)
 
-    return miniconsultas    
+    return miniconsultas
+
 
 def obtener_lista_miniconsultas(consulta_sql: str) -> list[miniconsulta_sql]:
     """
@@ -959,10 +982,11 @@ def obtener_lista_miniconsultas(consulta_sql: str) -> list[miniconsulta_sql]:
         la información que requiere la consulta original.
     """
     miniconsultas = obtener_miniconsultas(consulta_sql)
-    
+
     return miniconsultas['dependientes'] + miniconsultas['independientes']
 
-def obtener_ejecutor(consulta_sql:str):
+
+def obtener_ejecutor(consulta_sql: str):
     """
         Divide una consulta SQL en miniconsultas de menor complejidad
         y devuelve el ejecutor necesario para combinar las miniconsultas
@@ -978,6 +1002,7 @@ def obtener_ejecutor(consulta_sql:str):
             El ejecutor necesario para combinar las miniconsultas
     """
     return obtener_miniconsultas(consulta_sql)['ejecutor']
+
 
 def obtener_miniconsultas_anidadas(consulta_sql_ast: Expression):
     """
@@ -997,11 +1022,15 @@ def obtener_miniconsultas_anidadas(consulta_sql_ast: Expression):
     """
 
     aliases, tablas_alias = obtener_tablas(consulta_sql_ast)
-    condiciones, condiciones_or = obtener_condiciones_where(consulta_sql_ast).values()
-    proyecciones, agregaciones = obtener_proyecciones_agregaciones(consulta_sql_ast, aliases, tablas_alias)
-    condiciones_clasificada = clasificar_condiciones_where(condiciones, aliases, tablas_alias)
-    condiciones_joins = obtener_condiciones_joins(consulta_sql_ast, aliases, tablas_alias, condiciones_clasificada)
-    
+    condiciones, condiciones_or = obtener_condiciones_where(
+        consulta_sql_ast).values()
+    proyecciones, agregaciones = obtener_proyecciones_agregaciones(
+        consulta_sql_ast, aliases, tablas_alias)
+    condiciones_clasificada = clasificar_condiciones_where(
+        condiciones, aliases, tablas_alias)
+    condiciones_joins = obtener_condiciones_joins(
+        consulta_sql_ast, aliases, tablas_alias, condiciones_clasificada)
+
     limite = -1
     lista_order_by = []
     lista_group_by = []
@@ -1009,7 +1038,7 @@ def obtener_miniconsultas_anidadas(consulta_sql_ast: Expression):
     lista_having_or = []
     if consulta_sql_ast.args.get('order') != None:
         lista_order_by = obtener_order_by(consulta_sql_ast)
-    
+
     if consulta_sql_ast.args.get('group') != None:
         lista_group_by = obtener_group_by(consulta_sql_ast)
 
@@ -1017,17 +1046,18 @@ def obtener_miniconsultas_anidadas(consulta_sql_ast: Expression):
         limite = obtener_limit(consulta_sql_ast)
 
     if consulta_sql_ast.args.get('having') != None:
-        lista_having, lista_having_or = obtener_condiciones_having(consulta_sql_ast).values()
+        lista_having, lista_having_or = obtener_condiciones_having(
+            consulta_sql_ast).values()
 
-    return {"ejecutor": miniconsulta_sql_anidadas(proyecciones = proyecciones, 
-                                                  agregaciones = agregaciones, 
-                                                  aliases = aliases, 
-                                                  tablas_aliases = tablas_alias, 
-                                                  condiciones = condiciones, 
-                                                  condiciones_or = condiciones_or,
-                                                  condiciones_join = condiciones_joins, 
-                                                  limite = limite, 
-                                                  lista_order_by = lista_order_by, 
-                                                  lista_group_by = lista_group_by,
-                                                  condiciones_having = lista_having,
-                                                  condiciones_having_or = lista_having_or)}
+    return {"ejecutor": miniconsulta_sql_anidadas(proyecciones=proyecciones,
+                                                  agregaciones=agregaciones,
+                                                  aliases=aliases,
+                                                  tablas_aliases=tablas_alias,
+                                                  condiciones=condiciones,
+                                                  condiciones_or=condiciones_or,
+                                                  condiciones_join=condiciones_joins,
+                                                  limite=limite,
+                                                  lista_order_by=lista_order_by,
+                                                  lista_group_by=lista_group_by,
+                                                  condiciones_having=lista_having,
+                                                  condiciones_having_or=lista_having_or)}

@@ -79,7 +79,7 @@ def traducir_dataframe(df: pd.DataFrame,
     if columna_independiente in df.columns:
         columna_list = df[columna_independiente].tolist()
     
-    columna_str: str = " whose " + columna_dependiente + operacion + " in ("
+    columna_str: str = " where " + columna_dependiente + operacion + "in ("
 
     for i, item in enumerate(columna_list):
         if i != 0:

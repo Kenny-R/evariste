@@ -15,8 +15,8 @@ def main():
     # hacer_pruebas_en_lote()
     # prueba_LLM()
     # prueba_singular()
-    # pruebas_operacion()
-    pruebas_join()
+    pruebas_operacion()
+    # pruebas_join()
     # pruebas_anidamientos()
 
 
@@ -48,67 +48,21 @@ def prueba_singular():
 
         logging.basicConfig(filename=nombre, 
                             filemode='w', 
-                            format='%(levelname)s - %(message)s',
+                            format=u'%(levelname)s: %(message)s',
                             level=logging.INFO,
-                            force=True)
+                            force=True,
+                            encoding="utf-8")
 
 
-    # consulta_sql = """
-    #                 select distinct t3.name 
-    #                 from country as t1 
-    #                 join countrylanguage as t2 on t1.code = t2.countrycode 
-    #                 join city as t3 on t3.countrycode = t1.verga  
-    #                 where t2.isofficial = 't' and (t2.language = 'chinese' or t1.continent = "asia") and t3.nose = 1 and t3.otra = 2 and t3.jejox = 3
-    #             """
-
-    # consulta_sql = """
-    #                 select t1.name
-    #                 from country as t1 
-    #                 join countrylanguage as t2 on t1.code = t2.countrycode 
-    #                 join tumadre as t3 on t1.age = t3.age
-    #                 where t2.isofficial = 't' and t2.language = 'chinese' and t1.nose = panqueca
-    #                 """
-
-    # consulta_sql = """
-    #                 SELECT t1.border 
-    #                 FROM border_info as t1
-    #                 WHERE t1.state_name IN ( SELECT t2.border 
-    #                       FROM border_info as t2
-    #                       WHERE t2.state_name = "colorado" 
-    #                     );
-    #                 """
-
-    # consulta_sql = """
-    #                 select t1.a
-    #                 from nose as t1
-    #                 join hola as t2 on t1.c = t2.a
-    #                 where t1.b = 'x'
-    #             """
-
-    # consulta_sql = """
-    #                 SELECT SUM(T2.Name)
-    #             FROM
-    #                 country AS T1
-    #                 JOIN city AS T2 ON T2.CountryCode = T1.Code
-    #             WHERE
-    #                 T1.Continent = 'Europe'
-    #                 AND T1.Name NOT IN (
-    #                     SELECT
-    #                         T3.Name
-    #                     FROM
-    #                         country AS T3
-    #                         JOIN countrylanguage AS T4 ON T3.Code = T4.CountryCode
-    #                     WHERE
-    #                         T4.IsOfficial = 'T'
-    #                         AND T4.Language = 'English'
-    #                 )
-    #                """
+    consulta_sql = 'select t3.name from country as t1 join countrylanguage as t2 on  t1.country_name = t2.country_name join city as t3 on  t1.country_name = t3.country_name where t2.isofficial = "t" and t2.language = "chinese" and t1.continent = "asia"'
+    # consulta_sql = '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T2.CountryCode = T1.Code  WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
+   
+    ejecutor = obtener_ejecutor(consulta_sql)
     
+    ejecutor.ejecutar()
 
-    # consulta_sql = """select distinct t3.name from country as t1 join countrylanguage as t2 on  t2.countrycode = t1.code join city as t3 on  t3.countrycode = t1.code where t2.isofficial = 't' and t2.language = 'chinese' and t1.continent = 'asia'"""
-    #consulta_sql = """select count(t1.name), min(t1.population), max(t1.population), avg(t1.population) from country as t1 where t1.continent = 'north america'"""
-    # miniconsulta_sql = obtener_ejecutor(consulta_sql)
-    # print(obtener_ejecutor(consulta_sql))
+    print("Resultadop final: ")
+    print(ejecutor.resultado)
 
 def hacer_pruebas_en_lote():
     import pandas as pd
@@ -147,7 +101,7 @@ def pruebas_join():
     # consulta_sql = '''SELECT MIN ( T2.LENGTH ) FROM river AS T2 WHERE T2.country = "United States"'''
     # consulta_sql = '''SELECT t2.capital FROM state AS t2 JOIN city AS t1 ON t2.state_name = t1.state_name WHERE t1.city_name = "durham"'''
     
-    consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" AND T1.continent = "Europe"'''
+    # consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" AND T1.continent = "Europe"'''
     
     ejecutor: join_miniconsultas_sql = obtener_ejecutor(consulta_sql)
     
@@ -156,6 +110,16 @@ def pruebas_join():
     print(ejecutor.resultado)
 
 def pruebas_operacion():
+    if DEBUG:
+        nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
+
+        logging.basicConfig(filename=nombre, 
+                            filemode='w', 
+                            format=u'%(levelname)s: %(message)s',
+                            level=logging.INFO,
+                            force=True,
+                            encoding="utf-8")
+    
     consulta_sql = '''SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" EXCEPT SELECT T1.name FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.country_name WHERE T2.Language = "Spanish" AND T2.IsOfficial = "T" AND T1.continent = "Europe"'''
     ejecutor: operacion_miniconsultas_sql = obtener_ejecutor(consulta_sql)
     
