@@ -401,7 +401,7 @@ class join_miniconsultas_sql:
             cantidad)
 
         # Quitamos todo lo que no sea un numero o un punto
-        cantidad_procesada = re.sub("[^\.1-9]", "", cantidad_procesada)
+        cantidad_procesada = re.sub("[^\.0-9]", "", cantidad_procesada)
 
         # pasamos a flotante
         try:
@@ -434,7 +434,9 @@ class join_miniconsultas_sql:
                 continue
 
             try:
+                if DEBUG: logging.info(f"Datos antes de procesar las cantidades:\n{datos}")
                 datos = datos.apply(self._procesar_cantidades)
+                if DEBUG: logging.info(f"Datos despues de procesar las cantidades:\n{datos}")
             except:
                 if DEBUG:
                     logging.warning(f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos. Datos que se intentaron procesar: \n {datos.to_string()}')
@@ -444,26 +446,33 @@ class join_miniconsultas_sql:
                 continue
 
             if agregacion.key == "min":
+                # if DEBUG: 
+                #     logging.info(f"Iniciando el min sobre los datos:\n{datos}\n")
+                #     logging.info(f"El minimo es: {datos.min()}")
+                    
                 columnas_resultado = len(resultado.columns)
                 resultado.insert(columnas_resultado,
-                                 agregacion.sql(), datos.min())
+                                 agregacion.sql(), [datos.min()])
+                
+                # if DEBUG: logging.info(f"Terminado el min el resultado es:\n{resultado}\n")
 
             elif agregacion.key == "max":
                 columnas_resultado = len(resultado.columns)
                 resultado.insert(columnas_resultado,
-                                 agregacion.sql(), datos.max())
+                                 agregacion.sql(), [datos.max()])
 
             elif agregacion.key == "avg":
                 columnas_resultado = len(resultado.columns)
                 resultado.insert(columnas_resultado,
-                                 agregacion.sql(), datos.mean())
+                                 agregacion.sql(), [datos.mean()])
 
             elif agregacion.key == "sum":
                 columnas_resultado = len(resultado.columns)
                 resultado.insert(columnas_resultado,
-                                 agregacion.sql(), datos.sum())
+                                 agregacion.sql(), [datos.sum()])
 
         self.resultado = resultado
+        if DEBUG: logging.info(f"Despues de realizar las argregaciones el resultado es:\n{self.resultado}\n")
 
     def ejecutar(self):
         """
@@ -696,7 +705,6 @@ class operacion_miniconsultas_sql:
     def __str__(self) -> str:
         return self.imprimir_datos(0)
 
-
 class miniconsulta_sql_anidadas:
     """
         Clase que controla todos los datos necesarios para realizar
@@ -843,10 +851,14 @@ class miniconsulta_sql_anidadas:
         self.resultado = await hacer_consulta(traduccion, columnas)
 
     def ejecutar(self):
-
+        
+        if DEBUG: logging.info("Ejecutando subconsultas\n")
+        
         for subconsulta in self.subconsultas:
             subconsulta['subconsulta'].ejecutar()
 
+        if DEBUG: logging.info(f"información sobre las subconsultas:\n {self.subconsultas}\n")
+        
         traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
         self.status = STATUS[1]
         columnas = proyecciones + \

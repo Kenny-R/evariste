@@ -37,9 +37,9 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored",
+    # model="llama2-uncensored",
     # model="llama3",
-    # model="gemma:7b",
+    model="gemma:7b",
     num_ctx=4096,
     temperature = 0.3
 )
@@ -110,7 +110,11 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
         logging.warning(f"Procesando la petición: {traduccion}\n")
         logging.info(f"Resultado sin procesar: \n{resultado_limpio}\n")
 
-    df = mdpd.from_md(resultado_limpio)
+    try:
+        df = mdpd.from_md(resultado_limpio)
+    except:
+        df = pd.DataFrame()
+    
     if len(df) != 0:
         if len(df.columns) > len(columnas):
             # Hacer una busqueda de similitud por los nombres
