@@ -58,6 +58,11 @@ def columnas_join(condicion: Expression, tabla: str, fila: str) -> tuple[str, st
 
 def traducir_miniconsulta_anidada_scan(consulta: miniconsulta_sql_anidadas) -> str:
     tabla: str = list(consulta.tablas_aliases.values())[0]
+    if tabla[-1] == 'y':
+        tabla = tabla[:-1]
+        tabla += "ies"
+    else:
+        tabla += "s"
     proyeccion: list[str] = traducir_proyecciones(consulta.proyecciones[list(consulta.tablas_aliases.keys())[0]])
     return "Give me the " + ", ".join(proyeccion) + " of the " + tabla 
 

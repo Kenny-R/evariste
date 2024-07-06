@@ -930,10 +930,10 @@ class miniconsulta_sql_anidadas:
             for index, row in df_tuplas.iterrows():
                 tupla: tuple = tuple(row.values.tolist())
                 if anidamiento.get('operacion') == "not in":
-                    if bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.tablas_aliases[anidamiento.subconsultas[0].get('tabla')]))): # Revisar
+                    if bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.get('columna')))): # Revisar
                         filas_borrar.append(index)
                 else: 
-                    if not bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.tablas_aliases[anidamiento.subconsultas[0].get('tabla')]))): # Revisar
+                    if not bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.get('columna')))): # Revisar
                         filas_borrar.append(index)
             df_tuplas.drop(filas_borrar, axis=0, inplace=True)
         
