@@ -78,8 +78,8 @@ def crear_instrucciones(columnas: list[str]):
     elif len(columnas) > 1:
         texto += ", ".join(columnas[:-1]) + f" and {columnas[-1]}"
             
-    texto += " Your response should be a table\n"
-
+    texto += ". Your response should be a table\n"
+    
     texto += "If your answer is a number like millions or thousands, return the always all its digits using the format used in America. \n"
     texto += "If I ask you a question that is rooted in truth, you will give you the answer.\n"
     texto += "If I ask you a question that is nonsense, trickery, or has no clear answer, you will respond with 'Unknown'. "
@@ -132,5 +132,55 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     else:
         if DEBUG: logging.warning("La respuesta del LLM no tiene una tabla\n")
         
-
     return df
+
+def crear_ejemplos():
+    texto = "Examples: \n"
+    fewshot_chatgpt = [
+                        ['What is human life expectancy in the United States?', '78.'],
+                        ['Who was president of the United States in 1955?', 'Dwight D. Eisenhower.'],
+                        ['Which party was founded by Gramsci?', 'Comunista.'],
+                        ['What is the capital of France?', 'Paris.'],
+                        ['What is a continent starting with letter O?', 'Oceania.'],
+                        ['Where were the 1992 Olympics held?', 'Barcelona.'],
+                        ['How many squigs are in a bonk?', 'Unknown'],
+                        ['What is the population of Venezuela: 28,300,000']]
+    
+    texto += "\n".join([': '.join(shot) for shot in fewshot_chatgpt])
+    return (lambda *args: texto)
+
+async def hacer_pregunta(pregunta: str, contexto: str = "", instrucciones_extra:str = "", con_ejemplos: bool = False):
+
+    system_prompt=("You are a highly intelligent question answering bot. "
+                    "You will answer concisely. "
+                    "Use only the given context to answer the question. "
+                    "Context: {context}"
+                    "\n{format_instructions}"
+                    "\n{examples}")
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("human", "{question}"),
+        ],
+    )
+    instrucciones = "Intructions: "
+    instrucciones += instrucciones_extra
+    datos = {"context": lambda x: format_docs(contexto), 
+            "question": RunnablePassthrough(),
+            "format_instructions": lambda *args: instrucciones} 
+    
+    datos['examples'] = lambda *args: ""
+    
+    if con_ejemplos:
+        datos['examples'] = crear_ejemplos()
+    print(f"Procesando la pregunta:\n\t{pregunta}")
+    rag_chain = (
+        datos
+        | prompt
+        | ollama
+    )
+
+    resultado_limpio = rag_chain.invoke(pregunta)
+    print(f"Resultado: {resultado_limpio}\n")
+    return resultado_limpio

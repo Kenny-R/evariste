@@ -762,9 +762,10 @@ def dividir_joins(consulta_sql_ast: Expression) -> dict[str, dict[str, Any]]:
         else:
             datos_miniconsultas[alias]['proyecciones'] = []
 
-        if proyecciones_joins.get(alias) != None:
-            datos_miniconsultas[alias]['proyecciones'] += [i for i in proyecciones_joins[alias]
-                                                           if i not in datos_miniconsultas[alias]['proyecciones']]
+        # Comenta las siguientes 3 lineas para que no se agregen las columnas de los JOIN a las proyecciones
+        # if proyecciones_joins.get(alias) != None:
+        #     datos_miniconsultas[alias]['proyecciones'] += [i for i in proyecciones_joins[alias]
+        #                                                    if i not in datos_miniconsultas[alias]['proyecciones']]
 
         if condiciones_por_tablas.get(alias) != None:
             datos_miniconsultas[alias]['condiciones'] = condiciones_por_tablas[alias]

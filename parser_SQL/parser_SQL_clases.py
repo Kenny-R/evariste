@@ -16,7 +16,6 @@ OPERACIONES_CONJUNTOS = configuraciones['miniconsultas_operaciones']
 FUNCIONES_AGREGACION = configuraciones['miniconsultas_funciones_agregacion']
 DEBUG = configuraciones['debug']
 
-
 class miniconsulta_sql:
     """
         Clase que controla la ejecucion de una consulta 'simple' de SQL usando un LLM.
@@ -104,17 +103,16 @@ class miniconsulta_sql:
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
 
-    async def ejecutar2(self):
-        from ejecutar_LLM import hacer_consulta
+    async def ejecutar(self):
+        from ejecutar_LLM import hacer_consulta, hacer_pregunta, retriever
         from traduccion_sql_ln import filtrar_condicion, columnas_join
 
         async def procesar(consulta_procesar: miniconsulta_sql):
             if consulta_procesar.status == STATUS[0]:
                 traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
                 consulta_procesar.status = STATUS[1]
-                columnas = proyecciones + \
-                    [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
-                
+                columnas = proyecciones 
+                                
                 # Scan
                 df_tuplas: pd.DataFrame = await hacer_consulta(traduccion, columnas) # Revisar
 
@@ -122,8 +120,17 @@ class miniconsulta_sql:
                 for condicion in consulta_procesar.condiciones:
                     filas_borrar: list[int] = []
                     for index, row in df_tuplas.iterrows():
-                        tupla: tuple = tuple(row.values.tolist())
-                        if not bool(hacer_consulta(filtrar_condicion(condicion, tupla))): # Revisar
+                        tupla: tuple = tuple([f"{columna} = {valor}" for columna, valor in zip(df_tuplas.columns, row.values.tolist())])
+                        
+                        pregunta = filtrar_condicion(condicion, tupla)
+                        contexto = retriever.invoke(traduccion)
+                        instrucciones_extra = "You response must be only 'True' or 'False'\n don't Explain yourself\n don't apologize if you can't response\n in case that you can response the question say 'False'\n"
+                        
+                        respuesta = await hacer_pregunta(pregunta, 
+                                                         contexto,
+                                                         instrucciones_extra)
+                        
+                        if not re.search("true", respuesta, re.IGNORECASE): 
                             filas_borrar.append(index)
                     df_tuplas.drop(filas_borrar, axis=0, inplace=True)
                 
@@ -131,38 +138,21 @@ class miniconsulta_sql:
                 for condicion in consulta_procesar.condiciones_join:
                     columna: list = []
                     for index, row in df_tuplas.iterrows():
-                        tupla: tuple = tuple(row.values.tolist())
-                        dato, col_agg = columnas_join(condicion, consulta_procesar.tabla, tupla, consulta_procesar.alias)
-                        columna.append(hacer_consulta(dato)) # Revisar
-                    df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+                        tupla: tuple = tuple([f"{columna} = {valor}" for columna, valor in zip(df_tuplas.columns, row.values.tolist())])
+                        
+                        pregunta, col_agg = columnas_join(condicion, consulta_procesar.tabla, tupla, consulta_procesar.alias)
+                        contexto = retriever.invoke(traduccion)
+                        instrucciones_extra = "your response must be the shortest one\ndon't Explain yourself\ndon't apologize if you can't response\nin case that you can response the question say 'Unknow'\n"
+                        
+                        respuesta = await hacer_pregunta(pregunta, 
+                                                         contexto,
+                                                         instrucciones_extra)
+                        
+                        columna.append(respuesta) 
+                    if len(df_tuplas) != 0:
+                        df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
         
                 consulta_procesar.resultado = df_tuplas
-                consulta_procesar.status = STATUS[2]
-
-            elif consulta_procesar.status == STATUS[1]:
-                while consulta_procesar.status != STATUS[2]:
-                    asyncio.sleep(5)
-
-        if self.dependencias != None:
-            tareas = [procesar(dep) for dep in self.dependencias]
-            await asyncio.gather(*tareas)
-
-        await procesar(self)
-
-    async def ejecutar(self):
-        from ejecutar_LLM import hacer_consulta
-
-        async def procesar(consulta_procesar: miniconsulta_sql):
-            if consulta_procesar.status == STATUS[0]:
-                traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
-                consulta_procesar.status = STATUS[1]
-                columnas = proyecciones + \
-                    [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
-                # Traducción solo de la tabla
-                consulta_procesar.resultado = await hacer_consulta(traduccion, columnas)
-                # Dado el resultado entonces se quiere todas las columnas que tengan las condiciones
-                
-                # Dado el resultado se quiere las columnas de la condicion de join
                 consulta_procesar.status = STATUS[2]
 
             elif consulta_procesar.status == STATUS[1]:
@@ -199,8 +189,6 @@ class miniconsulta_sql:
 
     def __repr__(self) -> str:
         return self.imprimir_datos(0)
-
-
 class join_miniconsultas_sql:
     """
         Clase que controla todos los datos necesarios para realizar
@@ -613,7 +601,6 @@ class join_miniconsultas_sql:
 
     def __str__(self) -> str:
         return self.imprimir_datos(0)
-
 class operacion_miniconsultas_sql:
     """
         Clase que controla todos los datos necesarios para realizar
@@ -753,7 +740,6 @@ class operacion_miniconsultas_sql:
 
     def __str__(self) -> str:
         return self.imprimir_datos(0)
-
 class miniconsulta_sql_anidadas:
     """
         Clase que controla todos los datos necesarios para realizar
