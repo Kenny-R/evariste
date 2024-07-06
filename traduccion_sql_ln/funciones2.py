@@ -51,8 +51,8 @@ def obtener_columna_join(condicion: Expression, tabla: str) -> str:
     
     return (columna_izq if columna_izq is not None else columna_der)
 
-def columnas_join(condicion: Expression, tabla: str, fila: str) -> tuple[str, str]:
-    columna_join: str = obtener_columna_join(condicion, tabla)
+def columnas_join(condicion: Expression, tabla: str, fila: str, alias: str) -> tuple[str, str]:
+    columna_join: str = obtener_columna_join(condicion, alias)
     return f"Give me the {columna_join} which corresponds with te following data {fila}", columna_join
 
 

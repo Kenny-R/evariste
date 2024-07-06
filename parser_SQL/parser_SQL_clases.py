@@ -132,7 +132,7 @@ class miniconsulta_sql:
                     columna: list = []
                     for index, row in df_tuplas.iterrows():
                         tupla: tuple = tuple(row.values.tolist())
-                        dato, col_agg = columnas_join(condicion, consulta_procesar.tabla, tupla)
+                        dato, col_agg = columnas_join(condicion, consulta_procesar.tabla, tupla, consulta_procesar.alias)
                         columna.append(hacer_consulta(dato)) # Revisar
                     df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
         
@@ -900,7 +900,7 @@ class miniconsulta_sql_anidadas:
         self.resultado = await hacer_consulta(traduccion, columnas)
 
     def ejecutar(self):
-        from traduccion_sql_ln.funciones2 import filtrar_anidamiento, filtrar_condicion
+        from traduccion_sql_ln.funciones2 import filtrar_anidamiento, filtrar_condicion, columnas_join
         if DEBUG: logging.info("Ejecutando subconsultas\n")
         
         for subconsulta in self.subconsultas:
@@ -937,6 +937,15 @@ class miniconsulta_sql_anidadas:
                         filas_borrar.append(index)
             df_tuplas.drop(filas_borrar, axis=0, inplace=True)
         
+        # Rellenar columnas
+        for condicion in self.condiciones_join:
+            columna: list = []
+            for index, row in df_tuplas.iterrows():
+                tupla: tuple = tuple(row.values.tolist())
+                dato, col_agg = columnas_join(condicion, self.tablas_aliases[self.aliases[0]], tupla, self.aliases[0])
+                columna.append(hacer_consulta(dato)) # Revisar
+            df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+            
         self.resultado = df_tuplas
         #asyncio.run(self._ejecutar_aux(traduccion, columnas))
         self.status = STATUS[2]
