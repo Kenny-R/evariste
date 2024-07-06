@@ -102,9 +102,9 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     )
 
     resultado_limpio = rag_chain.invoke(traduccion)
-    # print("Resultado sin procesar: ")
-    # print(resultado_limpio)
-    # print("############################################################")
+    print("Resultado sin procesar: ")
+    print(resultado_limpio)
+    print("############################################################")
     
     if DEBUG:  
         logging.warning(f"Procesando la petición: {traduccion}\n")

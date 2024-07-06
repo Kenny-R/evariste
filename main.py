@@ -21,9 +21,9 @@ def main():
     # prueba_singular()
     # pruebas_operacion()
     # pruebas_join()
-    # pruebas_anidamientos()
+    pruebas_anidamientos()
     # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
-    ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
 
 def prueba_LLM():
@@ -135,7 +135,8 @@ def pruebas_operacion():
     print(ejecutor.resultado)
 
 def pruebas_anidamientos():
-    consulta_sql = '''select t1.capital from country as t1 where t1.name in (select t2.name from country as t2 where t2.country_language = "Spanish")'''
+    consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
+    # consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Area IN ( SELECT MIN(T2.Area) FROM country as T2 WHERE T2.CountryLanguage = "English" and T2.IsOfficialLanguage = 'T' )'''
     
     ejecutor: miniconsulta_sql_anidadas = obtener_ejecutor(consulta_sql)
     
@@ -215,5 +216,6 @@ def ejecucion_repetida_nl_en_lote(archivo_xls):
         
         print(f"Procesando el query {fila['query']}")
         ejecucion_repetida_nl(f'./resultados/ejecucion_preguntas_ln_salida_md/gemma/ejecuciones_preguntas_ln_nro_{i+1}.log',fila['ln'], fila['columnas'], 0, 20)
+
 if __name__ == "__main__":
     main()

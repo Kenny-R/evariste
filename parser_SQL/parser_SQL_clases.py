@@ -113,7 +113,11 @@ class miniconsulta_sql:
                 consulta_procesar.status = STATUS[1]
                 columnas = proyecciones + \
                     [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+                # Traducción solo de la tabla
                 consulta_procesar.resultado = await hacer_consulta(traduccion, columnas)
+                # Dado el resultado entonces se quiere todas las columnas que tengan las condiciones
+                
+                # Dado el resultado se quiere las columnas de la condicion de join
                 consulta_procesar.status = STATUS[2]
 
             elif consulta_procesar.status == STATUS[1]:
