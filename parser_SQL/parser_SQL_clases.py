@@ -95,14 +95,59 @@ class miniconsulta_sql:
     def crear_prompt(self):
         import traduccion_sql_ln
 
-        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql(
-            self, self.dependencias is not None)
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_scan(
+            self)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(
             self.proyecciones)
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(
             self.condiciones)
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
+
+    async def ejecutar2(self):
+        from ejecutar_LLM import hacer_consulta
+        from traduccion_sql_ln import filtrar_condicion, columnas_join
+
+        async def procesar(consulta_procesar: miniconsulta_sql):
+            if consulta_procesar.status == STATUS[0]:
+                traduccion, proyecciones, lista_columnas_condiciones = consulta_procesar.crear_prompt()
+                consulta_procesar.status = STATUS[1]
+                columnas = proyecciones + \
+                    [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+                
+                # Scan
+                df_tuplas: pd.DataFrame = await hacer_consulta(traduccion, columnas) # Revisar
+
+                # Filtros
+                for condicion in consulta_procesar.condiciones:
+                    filas_borrar: list[int] = []
+                    for index, row in df_tuplas.iterrows():
+                        tupla: tuple = tuple(row.values.tolist())
+                        if not bool(hacer_consulta(filtrar_condicion(condicion, tupla))): # Revisar
+                            filas_borrar.append(index)
+                    df_tuplas.drop(filas_borrar, axis=0, inplace=True)
+                
+                # Rellenar columnas
+                for condicion in consulta_procesar.condiciones_join:
+                    columna: list = []
+                    for index, row in df_tuplas.iterrows():
+                        tupla: tuple = tuple(row.values.tolist())
+                        dato, col_agg = columnas_join(condicion, consulta_procesar.tabla, tupla)
+                        columna.append(hacer_consulta(dato)) # Revisar
+                    df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+        
+                consulta_procesar.resultado = df_tuplas
+                consulta_procesar.status = STATUS[2]
+
+            elif consulta_procesar.status == STATUS[1]:
+                while consulta_procesar.status != STATUS[2]:
+                    asyncio.sleep(5)
+
+        if self.dependencias != None:
+            tareas = [procesar(dep) for dep in self.dependencias]
+            await asyncio.gather(*tareas)
+
+        await procesar(self)
 
     async def ejecutar(self):
         from ejecutar_LLM import hacer_consulta
@@ -842,7 +887,7 @@ class miniconsulta_sql_anidadas:
     def crear_prompt(self):
         import traduccion_sql_ln
 
-        traduccion = traduccion_sql_ln.traducir_miniconsulta_sql_anidada(self)
+        traduccion = traduccion_sql_ln.traducir_miniconsulta_anidada_scan(self)
         proyecciones = traduccion_sql_ln.traducir_proyecciones(
             self.proyecciones[list(self.tablas_aliases.keys())[0]])
         lista_columnas_condiciones = traduccion_sql_ln.obtener_columnas_condicion(
@@ -855,7 +900,7 @@ class miniconsulta_sql_anidadas:
         self.resultado = await hacer_consulta(traduccion, columnas)
 
     def ejecutar(self):
-        
+        from traduccion_sql_ln.funciones2 import filtrar_anidamiento, filtrar_condicion
         if DEBUG: logging.info("Ejecutando subconsultas\n")
         
         for subconsulta in self.subconsultas:
@@ -867,7 +912,33 @@ class miniconsulta_sql_anidadas:
         self.status = STATUS[1]
         columnas = proyecciones + \
             [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
-        asyncio.run(self._ejecutar_aux(traduccion, columnas))
+        # SCAN
+        df_tuplas: pd.DataFrame = hacer_consulta(traduccion, columnas)
+
+        # Filtros
+        for condicion in self.condiciones:
+            filas_borrar: list[int] = []
+            for index, row in df_tuplas.iterrows():
+                tupla: tuple = tuple(row.values.tolist())
+                if not bool(hacer_consulta(filtrar_condicion(condicion, tupla))): # Revisar
+                    filas_borrar.append(index)
+            df_tuplas.drop(filas_borrar, axis=0, inplace=True)
+
+        # Filtros de anidamientos 
+        for anidamiento in self.subconsultas:
+            filas_borrar: list[int] = []
+            for index, row in df_tuplas.iterrows():
+                tupla: tuple = tuple(row.values.tolist())
+                if anidamiento.get('operacion') == "not in":
+                    if bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.tablas_aliases[anidamiento.subconsultas[0].get('tabla')]))): # Revisar
+                        filas_borrar.append(index)
+                else: 
+                    if not bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.tablas_aliases[anidamiento.subconsultas[0].get('tabla')]))): # Revisar
+                        filas_borrar.append(index)
+            df_tuplas.drop(filas_borrar, axis=0, inplace=True)
+        
+        self.resultado = df_tuplas
+        #asyncio.run(self._ejecutar_aux(traduccion, columnas))
         self.status = STATUS[2]
 
     def imprimir_datos(self, nivel: int) -> str:

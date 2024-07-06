@@ -149,14 +149,15 @@ def procesar_anidamientos(lista_anidamientos: list[dict[str, str | Expression]])
     anidamiento_str: str = ""
 
     for info_subconsulta in lista_anidamientos:
-        proyeccion_sub: str 
-        if len(info_subconsulta['subconsulta'].miniconsultas_dependientes) != 0:
+        proyeccion_sub: str
+        if len(info_subconsulta['subconsulta'].lista_agregaciones):
+            proyeccion_sub = str(info_subconsulta['subconsulta'].lista_agregaciones[0])
+
+        elif len(info_subconsulta['subconsulta'].miniconsultas_dependientes) != 0:
             proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_dependientes[0].proyecciones[0])
         else:
             proyeccion_sub = str(info_subconsulta['subconsulta'].miniconsultas_independientes[0].proyecciones[0])
-        
-        print(info_subconsulta['subconsulta'].resultado)
-        print(proyeccion_sub)
+           
         anidamiento_str += traducir_dataframe(info_subconsulta['subconsulta'].resultado, 
                                str(info_subconsulta['columna']), 
                                proyeccion_sub, obtener_operador(info_subconsulta['operacion']))
