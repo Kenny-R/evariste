@@ -68,17 +68,18 @@ def traducir_miniconsulta_anidada_scan(consulta: miniconsulta_sql_anidadas) -> s
 
 
 def  filtrar_anidamiento(subconsulta: dict, tupla: tuple, columna: str) -> str:
+    resultado_subconsulta = tuple([]) if subconsulta.get('subconsulta').resultado.empty else tuple(subconsulta.get('subconsulta').resultado[:, 0].to_list())
     match subconsulta.get('operacion'):
         case "eq":
-            return f"Has {tupla} {subconsulta.get('subconsulta').resultado[0].tolist()} {columna}?" 
+            return f"Has {tupla} {resultado_subconsulta} {columna}?" 
         case "neq":
-            return f"Has {tupla} their {columna} not equal to {subconsulta.get('subconsulta').resultado[0].tolist()}?" 
+            return f"Has {tupla} their {columna} not equal to {resultado_subconsulta}?" 
         case "gt":
-            return f"Has {tupla} more than {subconsulta.get('subconsulta').resultado[0].tolist()} {columna}?" 
+            return f"Has {tupla} more than {resultado_subconsulta} {columna}?" 
         case "gte":
-            return f"Has {tupla} more than or equal to {subconsulta.get('subconsulta').resultado[0].tolist()} {columna}?"
+            return f"Has {tupla} more than or equal to {resultado_subconsulta} {columna}?"
         case "lt":
-            return f"Has {tupla} less than {subconsulta.get('subconsulta').resultado[0].tolist()} {columna}?" 
+            return f"Has {tupla} less than {resultado_subconsulta} {columna}?" 
         case "lte":
-            return f"Has {tupla} less than or equal to {subconsulta.get('subconsulta').resultado[0].tolist()} {columna}?" 
-    return f"Has {tupla} their {columna} {subconsulta.get('operacion')} {subconsulta.get('subconsulta').resultado[0].tolist()}?"
+            return f"Has {tupla} less than or equal to {resultado_subconsulta} {columna}?" 
+    return f"Has {tupla} their {columna} {subconsulta.get('operacion')} {resultado_subconsulta}?"
