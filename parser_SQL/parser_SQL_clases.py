@@ -755,7 +755,7 @@ class miniconsulta_sql_anidadas:
     """
 
     proyecciones: dict[str, Expression]
-    agregaciones: list[Expression]
+    lista_agregaciones: list[Expression]
     aliases: list[str]
     tablas_aliases: dict[str, str]
     condiciones_join: list[Expression]
@@ -784,7 +784,7 @@ class miniconsulta_sql_anidadas:
                  lista_group_by: list[dict[str, str]] = []) -> None:
 
         self.proyecciones = proyecciones
-        self.agregaciones = agregaciones
+        self.lista_agregaciones = agregaciones
         self.aliases = aliases
         self.tablas_aliases = tablas_aliases
         self.condiciones = condiciones
@@ -853,7 +853,130 @@ class miniconsulta_sql_anidadas:
     async def _ejecutar_aux(self, traduccion, columnas):
         from ejecutar_LLM import hacer_consulta
         self.resultado = await hacer_consulta(traduccion, columnas)
+    
+    def _ordenar_resultados(self):
+        
+        if DEBUG: logging.info("Ordenando los resultados\n")
+        
+        columnas = []
+        ascendente = []
 
+        for datos_order_by in self.lista_order_by:
+            tabla, columna, tipo = datos_order_by.values()
+
+            if f"{tabla}.{columna}".strip() not in self.resultado.columns:
+                continue
+
+            columnas.append(f"{tabla}.{columna}".strip())
+            ascendente.append(tipo == "ASC")
+
+        self.resultado.sort_values(
+            by=columnas, ascending=ascendente, inplace=True)
+
+    def _transformar_abreviaciones(self, cantidad: str):
+        exponente = 0
+        cantidad_procesada = cantidad
+
+        unidades = {"thousand": 3, "million": 6, "billion": 9, "trillion": 12}
+        abreviaciones = {"K": 3, "M": 6, "B": 9, "T": 12}
+
+        for unidad in unidades.keys():
+            if re.findall(unidad, cantidad_procesada, re.I) != []:
+                exponente += unidades[unidad] * \
+                    len(re.findall(unidad, cantidad_procesada))
+
+                cantidad_procesada = re.sub(
+                    unidad, "", cantidad_procesada, flags=re.I)
+
+        for abreviacion in abreviaciones.keys():
+            if re.findall(unidad, cantidad_procesada, re.I) != []:
+                exponente += abreviaciones[abreviacion] * \
+                    len(re.findall(abreviacion, cantidad_procesada))
+
+                cantidad_procesada = re.sub(
+                    abreviacion, "", cantidad_procesada, flags=re.I)
+
+        return (exponente, cantidad_procesada)
+
+    def _procesar_cantidades(self, cantidad: str):
+        # procesamos las unidades (Millones, Billones, Miles, M, B, K)
+        exponente, cantidad_procesada = self._transformar_abreviaciones(
+            cantidad)
+
+        # Quitamos todo lo que no sea un numero o un punto
+        cantidad_procesada = re.sub("[^\.0-9]", "", cantidad_procesada)
+
+        # pasamos a flotante
+        try:
+            cantidad_final = float(cantidad_procesada)
+        except:
+            raise Exception("No se pudo transformar el numero a flotante")
+
+        cantidad_final *= 10**(exponente)
+
+        return cantidad_final
+
+    def _hacer_agregaciones(self):
+        
+        if DEBUG: logging.info("Haciendo agregaciones\n")
+        
+        resultado = pd.DataFrame()
+        for agregacion in self.lista_agregaciones:
+            columna = agregacion.this.sql()
+
+            if columna not in self.resultado.columns:
+                continue
+
+            datos = self.resultado[columna]
+
+            if agregacion.key == "count":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [len(datos)])
+
+                continue
+
+            try:
+                if DEBUG: logging.info(f"Datos antes de procesar las cantidades:\n{datos}")
+                datos = datos.apply(self._procesar_cantidades)
+                if DEBUG: logging.info(f"Datos despues de procesar las cantidades:\n{datos}")
+            except:
+                if DEBUG:
+                    logging.warning(f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos. Datos que se intentaron procesar: \n {datos.to_string()}')
+                
+                print(
+                    f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos')
+                continue
+
+            if agregacion.key == "min":
+                # if DEBUG: 
+                #     logging.info(f"Iniciando el min sobre los datos:\n{datos}\n")
+                #     logging.info(f"El minimo es: {datos.min()}")
+                    
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.min()])
+                
+                # if DEBUG: logging.info(f"Terminado el min el resultado es:\n{resultado}\n")
+
+            elif agregacion.key == "max":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.max()])
+
+            elif agregacion.key == "avg":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.mean()])
+
+            elif agregacion.key == "sum":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.sum()])
+
+        self.resultado = resultado
+        if DEBUG: logging.info(f"Despues de realizar las argregaciones el resultado es:\n{self.resultado}\n")    
+    
     def ejecutar(self):
         
         if DEBUG: logging.info("Ejecutando subconsultas\n")
@@ -868,6 +991,45 @@ class miniconsulta_sql_anidadas:
         columnas = proyecciones + \
             [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
         asyncio.run(self._ejecutar_aux(traduccion, columnas))
+        
+        self.resultado.columns = [f"{list(self.tablas_aliases.keys())[0]}.{columna}" for columna in self.resultado.columns]
+        
+        # Eliminamos las columnas repetidas
+        procesadas = []    
+        for i, columna in enumerate(self.resultado.columns):
+            if columna not in procesadas:
+                procesadas.append(columna)
+            else:
+                self.resultado.columns = [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j < i] + ['BORRAR'] + [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j > i]
+        
+        self.resultado.drop(columns='BORRAR', inplace=True)        
+        
+        # Estamos suponiendo que si hay agregaciones en el select no hay proyecciones. Esto mientras no
+        # exista la opcion de group by
+        if len(self.lista_agregaciones) != 0:
+            self._hacer_agregaciones()
+        else:
+            estan_proyecciones = True
+            lista_proyecciones = []
+
+            for proyecciones in self.proyecciones.values():
+                lista_proyecciones += proyecciones
+
+            for proyeccion in lista_proyecciones:
+                if proyeccion.sql() not in self.resultado.columns:
+                    estan_proyecciones = False
+                    break
+
+            if estan_proyecciones:
+                self.resultado = self.resultado[[
+                    proyeccion.sql() for proyeccion in lista_proyecciones]]
+            else:
+                if DEBUG:
+                    logging.error(
+                        "La tabla final no tiene todas las columnas que pide el select\n")
+            
+            if DEBUG:
+                logging.info(f"Tabla final:\n{self.resultado}\n")
         self.status = STATUS[2]
 
     def imprimir_datos(self, nivel: int) -> str:
@@ -878,7 +1040,7 @@ class miniconsulta_sql_anidadas:
         return f"""
 {nivel*'    '}CONSULTA ANIDADA
 {(nivel + 1)*'    '}proyecciones: {proyecciones_imprimir}
-{(nivel + 1)*'    '}agregaciones: {[i.sql() for i in self.agregaciones]}
+{(nivel + 1)*'    '}agregaciones: {[i.sql() for i in self.lista_agregaciones]}
 {(nivel + 1)*'    '}aliases: {self.aliases}
 {(nivel + 1)*'    '}tablas_aliases: {self.tablas_aliases}
 {(nivel + 1)*'    '}condiciones_join: {[i.sql() for i in self.condiciones_join]}

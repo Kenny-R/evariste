@@ -8,6 +8,7 @@ from time import time
 from parser_SQL import *
 from datetime import datetime
 from ejecutar_LLM import hacer_consulta
+import ejecutar_LLM
 from traduccion_sql_ln.funciones import *
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
@@ -18,10 +19,10 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
-    # prueba_singular()
+    prueba_singular()
     # pruebas_operacion()
     # pruebas_join()
-    pruebas_anidamientos()
+    # pruebas_anidamientos()
     # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
     # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
@@ -48,27 +49,27 @@ def prueba_LLM():
         print(df)
 
 def prueba_singular():
+    # if DEBUG:
+    #     nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
 
-    if DEBUG:
-        nombre = 'log_parser_' + datetime.today().strftime('%d_%m_%Y') + ".log"
-
-        logging.basicConfig(filename=nombre, 
-                            filemode='w', 
-                            format=u'%(levelname)s: %(message)s',
-                            level=logging.INFO,
-                            force=True,
-                            encoding="utf-8")
+    #     logging.basicConfig(filename=nombre, 
+    #                         filemode='w', 
+    #                         format=u'%(levelname)s: %(message)s',
+    #                         level=logging.INFO,
+    #                         force=True,
+    #                         encoding="utf-8")
 
 
     # consulta_sql = 'select t3.name from country as t1 join countrylanguage as t2 on  t1.country_name = t2.country_name join city as t3 on  t1.country_name = t3.country_name where t2.isofficial = "t" and t2.language = "chinese" and t1.continent = "asia"'
-    consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Name = T2.Country_name WHERE T1.GovernmentForm = "Republic"'
+    # consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Name = T2.Country_name WHERE T1.GovernmentForm = "Republic"'
+    consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name NOT IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
     ejecutor = obtener_ejecutor(consulta_sql)
     
     ejecutor.ejecutar()
 
     print("Resultado final: ")
     print(ejecutor.resultado)
-
+    print((f'Se hicieron {ejecutar_LLM.ejecuciones} peticiones al LLM'))
 def hacer_pruebas_en_lote():
     import pandas as pd
 

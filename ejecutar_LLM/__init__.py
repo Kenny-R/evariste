@@ -16,6 +16,9 @@ EMBEDDINGS_FOLDER = configuraciones['EMBEDDINGS_FOLDER']
 EMBEDDINGS_INDEX = configuraciones['EMBEDDINGS_INDEX']
 DEBUG = configuraciones['debug']
 
+# Cantidad de ejecuciones 
+global ejecuciones
+ejecuciones = 0
 
 # Configuración del modelo de embeding
 modelPath = EMBEDDINGS_MODEL
@@ -87,7 +90,8 @@ def crear_instrucciones(columnas: list[str]):
     return (lambda *args: texto)
 
 async def hacer_consulta(traduccion: str, columnas: list[str]):
-
+    global ejecuciones
+    
     columnas_traduccion = type(columnas)(columnas)
     print("############################################################")
     print(f"Procesando la pregunta:\n\t{traduccion}")
@@ -132,5 +136,5 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     else:
         if DEBUG: logging.warning("La respuesta del LLM no tiene una tabla\n")
         
-
+    ejecuciones +=1
     return df
