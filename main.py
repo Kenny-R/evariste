@@ -51,13 +51,17 @@ def prueba_singular():
 
     # consulta_sql = 'select t3.name from country as t1 join countrylanguage as t2 on  t1.country_name = t2.country_name join city as t3 on  t1.country_name = t3.country_name where t2.isofficial = "t" and t2.language = "chinese" and t1.continent = "asia"'
     # consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Name = T2.Country_name WHERE T1.GovernmentForm = "Republic"'
+    # consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.CountryName WHERE T1.HeadOfState = "Felipe VI" AND T2.IsOfficial = "T"' 
     
-    consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.name = T2.CountryName WHERE T1.HeadOfState = "Felipe VI" AND T2.IsOfficial = "T"' 
+    consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name NOT IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
+    
+    # consulta_sql = '''SELECT t1.area FROM country as t1 WHERE t1.countryName = "Spain";'''
     
     ejecutor = obtener_ejecutor(consulta_sql)
 
     ejecutor.ejecutar()
     
+    # print(ejecutor)
     print("Resultado final: ")
     print(ejecutor.resultado)
 

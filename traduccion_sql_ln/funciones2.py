@@ -29,7 +29,7 @@ def filtrar_condicion(condicion: Expression, tupla) -> str:
     columna, reverso, literal = obtener_columna(condicion)
     match condicion.key:
         case "eq":
-            return f"Has {tupla} {obtener_literal(condicion, literal)} {columna}?" 
+            return f"Has {tupla} {columna} = {obtener_literal(condicion, literal)}?" 
         case "is":
             return f"Has {tupla} their {columna} equal to {obtener_literal(condicion, literal)}?"
         case "neq":
@@ -68,7 +68,14 @@ def traducir_miniconsulta_anidada_scan(consulta: miniconsulta_sql_anidadas) -> s
 
 
 def  filtrar_anidamiento(subconsulta: dict, tupla: tuple, columna: str) -> str:
-    resultado_subconsulta = tuple([]) if subconsulta.get('subconsulta').resultado.empty else tuple(subconsulta.get('subconsulta').resultado[:, 0].to_list())
+    if len(subconsulta.get('subconsulta').resultado) != 0:
+        if subconsulta.get('operacion') == "in" or subconsulta.get('operacion') == "not in":
+            resultado_subconsulta = tuple(list(subconsulta.get('subconsulta').resultado.itertuples(index=False, name=None)))
+        else:
+            resultado_subconsulta = tuple(subconsulta.get('subconsulta').resultado[:, 0].to_list())
+    else:
+        resultado_subconsulta = tuple([])
+    
     match subconsulta.get('operacion'):
         case "eq":
             return f"Has {tupla} {resultado_subconsulta} {columna}?" 
@@ -82,4 +89,9 @@ def  filtrar_anidamiento(subconsulta: dict, tupla: tuple, columna: str) -> str:
             return f"Has {tupla} less than {resultado_subconsulta} {columna}?" 
         case "lte":
             return f"Has {tupla} less than or equal to {resultado_subconsulta} {columna}?" 
+        case "in":
+            return f"Has {tupla} their {columna} is in {resultado_subconsulta}?"
+        case "not in":
+            return f"Has {tupla} their {columna} is in {resultado_subconsulta}?"
+            
     return f"Has {tupla} their {columna} {subconsulta.get('operacion')} {resultado_subconsulta}?"

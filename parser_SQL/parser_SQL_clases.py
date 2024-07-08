@@ -6,6 +6,7 @@ import logging
 import asyncio
 import pandas as pd
 from sqlglot import Expression
+from collections import Counter
 from typing import Optional, Union
 from sqlglot.expressions import In, Binary, Not, Subquery
 
@@ -786,7 +787,7 @@ class miniconsulta_sql_anidadas:
     """
 
     proyecciones: dict[str, Expression]
-    agregaciones: list[Expression]
+    lista_agregaciones: list[Expression]
     aliases: list[str]
     tablas_aliases: dict[str, str]
     condiciones_join: list[Expression]
@@ -815,7 +816,7 @@ class miniconsulta_sql_anidadas:
                  lista_group_by: list[dict[str, str]] = []) -> None:
 
         self.proyecciones = proyecciones
-        self.agregaciones = agregaciones
+        self.lista_agregaciones = agregaciones
         self.aliases = aliases
         self.tablas_aliases = tablas_aliases
         self.condiciones = condiciones
@@ -880,12 +881,133 @@ class miniconsulta_sql_anidadas:
             self.condiciones)
 
         return (traduccion, proyecciones, lista_columnas_condiciones)
+    
+    def _ordenar_resultados(self):
+        
+        if DEBUG: logging.info("Ordenando los resultados\n")
+        
+        columnas = []
+        ascendente = []
 
-    async def _ejecutar_aux(self, traduccion, columnas):
-        from ejecutar_LLM import hacer_consulta
-        self.resultado = await hacer_consulta(traduccion, columnas)
+        for datos_order_by in self.lista_order_by:
+            tabla, columna, tipo = datos_order_by.values()
 
+            if f"{tabla}.{columna}".strip() not in self.resultado.columns:
+                continue
+
+            columnas.append(f"{tabla}.{columna}".strip())
+            ascendente.append(tipo == "ASC")
+
+        self.resultado.sort_values(
+            by=columnas, ascending=ascendente, inplace=True)
+
+    def _transformar_abreviaciones(self, cantidad: str):
+        exponente = 0
+        cantidad_procesada = cantidad
+
+        unidades = {"thousand": 3, "million": 6, "billion": 9, "trillion": 12}
+        abreviaciones = {"K": 3, "M": 6, "B": 9, "T": 12}
+
+        for unidad in unidades.keys():
+            if re.findall(unidad, cantidad_procesada, re.I) != []:
+                exponente += unidades[unidad] * \
+                    len(re.findall(unidad, cantidad_procesada))
+
+                cantidad_procesada = re.sub(
+                    unidad, "", cantidad_procesada, flags=re.I)
+
+        for abreviacion in abreviaciones.keys():
+            if re.findall(unidad, cantidad_procesada, re.I) != []:
+                exponente += abreviaciones[abreviacion] * \
+                    len(re.findall(abreviacion, cantidad_procesada))
+
+                cantidad_procesada = re.sub(
+                    abreviacion, "", cantidad_procesada, flags=re.I)
+
+        return (exponente, cantidad_procesada)
+
+    def _procesar_cantidades(self, cantidad: str):
+        # procesamos las unidades (Millones, Billones, Miles, M, B, K)
+        exponente, cantidad_procesada = self._transformar_abreviaciones(
+            cantidad)
+
+        # Quitamos todo lo que no sea un numero o un punto
+        cantidad_procesada = re.sub("[^\.0-9]", "", cantidad_procesada)
+
+        # pasamos a flotante
+        try:
+            cantidad_final = float(cantidad_procesada)
+        except:
+            raise Exception("No se pudo transformar el numero a flotante")
+
+        cantidad_final *= 10**(exponente)
+
+        return cantidad_final
+
+    def _hacer_agregaciones(self):
+        
+        if DEBUG: logging.info("Haciendo agregaciones\n")
+        
+        resultado = pd.DataFrame()
+        for agregacion in self.lista_agregaciones:
+            columna = agregacion.this.sql()
+
+            if columna not in self.resultado.columns:
+                continue
+
+            datos = self.resultado[columna]
+
+            if agregacion.key == "count":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [len(datos)])
+
+                continue
+
+            try:
+                if DEBUG: logging.info(f"Datos antes de procesar las cantidades:\n{datos}")
+                datos = datos.apply(self._procesar_cantidades)
+                if DEBUG: logging.info(f"Datos despues de procesar las cantidades:\n{datos}")
+            except:
+                if DEBUG:
+                    logging.warning(f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos. Datos que se intentaron procesar: \n {datos.to_string()}')
+                
+                print(
+                    f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos')
+                continue
+
+            if agregacion.key == "min":
+                # if DEBUG: 
+                #     logging.info(f"Iniciando el min sobre los datos:\n{datos}\n")
+                #     logging.info(f"El minimo es: {datos.min()}")
+                    
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.min()])
+                
+                # if DEBUG: logging.info(f"Terminado el min el resultado es:\n{resultado}\n")
+
+            elif agregacion.key == "max":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.max()])
+
+            elif agregacion.key == "avg":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.mean()])
+
+            elif agregacion.key == "sum":
+                columnas_resultado = len(resultado.columns)
+                resultado.insert(columnas_resultado,
+                                 agregacion.sql(), [datos.sum()])
+
+        self.resultado = resultado
+        if DEBUG: logging.info(f"Despues de realizar las argregaciones el resultado es:\n{self.resultado}\n")
+    
     def ejecutar(self):
+        from ejecutar_LLM import hacer_consulta, hacer_pregunta, retriever
+        
         from traduccion_sql_ln.funciones2 import filtrar_anidamiento, filtrar_condicion, columnas_join
         if DEBUG: logging.info("Ejecutando subconsultas\n")
         
@@ -896,44 +1018,117 @@ class miniconsulta_sql_anidadas:
         
         traduccion, proyecciones, lista_columnas_condiciones = self.crear_prompt()
         self.status = STATUS[1]
-        columnas = proyecciones + \
-            [columna for columna in lista_columnas_condiciones if columna not in proyecciones]
+        
+        columnas = proyecciones
+        
         # SCAN
-        df_tuplas: pd.DataFrame = hacer_consulta(traduccion, columnas)
+        df_tuplas: pd.DataFrame = asyncio.run(hacer_consulta(traduccion, columnas))
 
         # Filtros
         for condicion in self.condiciones:
             filas_borrar: list[int] = []
             for index, row in df_tuplas.iterrows():
-                tupla: tuple = tuple(row.values.tolist())
-                if not bool(hacer_consulta(filtrar_condicion(condicion, tupla))): # Revisar
+                tupla: tuple = tuple([f"{columna} = {valor}" for columna, valor in zip(df_tuplas.columns, row.values.tolist())])
+                
+                pregunta = filtrar_condicion(condicion, tupla)
+                contexto = retriever.invoke(traduccion)
+                instrucciones_extra = "You response must be only 'True' or 'False'\n don't Explain yourself\n don't apologize if you can't response\n in case that you can response the question say 'False'\n"
+                respuesta = asyncio.run(hacer_pregunta(pregunta, 
+                                                       contexto,
+                                                       instrucciones_extra))
+                
+                if not re.search("true", respuesta, re.IGNORECASE):
                     filas_borrar.append(index)
             df_tuplas.drop(filas_borrar, axis=0, inplace=True)
-
+                    
         # Filtros de anidamientos 
         for anidamiento in self.subconsultas:
             filas_borrar: list[int] = []
             for index, row in df_tuplas.iterrows():
-                tupla: tuple = tuple(row.values.tolist())
+                tupla: tuple = tuple([f"{columna} = {valor}" for columna, valor in zip(df_tuplas.columns, row.values.tolist())])
+                                
+                pregunta = filtrar_anidamiento(anidamiento, tupla, anidamiento.get('columna'))
+                contexto = retriever.invoke(traduccion)
+                instrucciones_extra = "You response must be only 'True' or 'False'\n don't Explain yourself\n don't apologize if you can't response\n in case that you can response the question say 'False'\n"
+                respuesta = asyncio.run(hacer_pregunta(pregunta, 
+                                                       contexto,
+                                                       instrucciones_extra))
+                
                 if anidamiento.get('operacion') == "not in":
-                    if bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.get('columna')))): # Revisar
+                    if re.search("true", respuesta, re.IGNORECASE): # Revisar
                         filas_borrar.append(index)
                 else: 
-                    if not bool(hacer_consulta(filtrar_anidamiento(anidamiento, tupla, anidamiento.get('columna')))): # Revisar
+                    if not re.search("true", respuesta, re.IGNORECASE): # Revisar
                         filas_borrar.append(index)
+                        
             df_tuplas.drop(filas_borrar, axis=0, inplace=True)
         
         # Rellenar columnas
         for condicion in self.condiciones_join:
             columna: list = []
             for index, row in df_tuplas.iterrows():
-                tupla: tuple = tuple(row.values.tolist())
-                dato, col_agg = columnas_join(condicion, self.tablas_aliases[self.aliases[0]], tupla, self.aliases[0])
-                columna.append(hacer_consulta(dato)) # Revisar
-            df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
-            
+                tupla: tuple = tuple([f"{columna} = {valor}" for columna, valor in zip(df_tuplas.columns, row.values.tolist())])
+                
+                pregunta, col_agg = columnas_join(condicion, self.tablas_aliases[self.aliases[0]], tupla, self.aliases[0])
+                contexto = retriever.invoke(traduccion)
+                instrucciones_extra = "your response must be the shortest one\ndon't Explain yourself\ndon't apologize if you can't response\nin case that you can response the question say 'Unknow'\n"
+                respuesta = asyncio.run(hacer_pregunta(pregunta, 
+                                                    contexto,
+                                                    instrucciones_extra))
+                
+                columna.append(respuesta)
+            if len(df_tuplas) != 0:
+                df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+                
+        df_tuplas.columns = [f"{list(self.tablas_aliases.keys())[0]}.{columna}" for columna in df_tuplas.columns]
+        
+        # Eliminamos las columnas repetidas
+        procesadas = []    
+        for i, columna in enumerate(df_tuplas.columns):
+            if columna not in procesadas:
+                procesadas.append(columna)
+            else:
+                df_tuplas.columns = [df_tuplas.columns[j] for j in range(len(df_tuplas.columns)) if j < i] + ['BORRAR'] + [df_tuplas.columns[j] for j in range(len(df_tuplas.columns)) if j > i]
+        
+        df_tuplas.drop(columns='BORRAR', inplace=True)
         self.resultado = df_tuplas
-        #asyncio.run(self._ejecutar_aux(traduccion, columnas))
+        
+        if self.limite > 0:
+            if DEBUG:
+                logging.info("Tiene un limit, limitamos la tabla resultado\n")
+
+            self.resultado = self.resultado.iloc[:self.limite]
+
+        if len(self.lista_order_by) != 0:
+            self._ordenar_resultados()
+
+        # Estamos suponiendo que si hay agregaciones en el select no hay proyecciones. Esto mientras no
+        # exista la opcion de group by
+        if len(self.lista_agregaciones) != 0:
+            self._hacer_agregaciones()
+        else:
+            estan_proyecciones = True
+            lista_proyecciones = []
+
+            for proyecciones in self.proyecciones.values():
+                lista_proyecciones += proyecciones
+
+            for proyeccion in lista_proyecciones:
+                if proyeccion.sql() not in self.resultado.columns:
+                    estan_proyecciones = False
+                    break
+
+            if estan_proyecciones:
+                self.resultado = self.resultado[[
+                    proyeccion.sql() for proyeccion in lista_proyecciones]]
+            else:
+                if DEBUG:
+                    logging.error(
+                        "La tabla final no tiene todas las columnas que pide el select\n")
+            
+            if DEBUG:
+                logging.info(f"Tabla final:\n{self.resultado}\n")
+        
         self.status = STATUS[2]
 
     def imprimir_datos(self, nivel: int) -> str:
@@ -944,7 +1139,7 @@ class miniconsulta_sql_anidadas:
         return f"""
 {nivel*'    '}CONSULTA ANIDADA
 {(nivel + 1)*'    '}proyecciones: {proyecciones_imprimir}
-{(nivel + 1)*'    '}agregaciones: {[i.sql() for i in self.agregaciones]}
+{(nivel + 1)*'    '}agregaciones: {[i.sql() for i in self.lista_agregaciones]}
 {(nivel + 1)*'    '}aliases: {self.aliases}
 {(nivel + 1)*'    '}tablas_aliases: {self.tablas_aliases}
 {(nivel + 1)*'    '}condiciones_join: {[i.sql() for i in self.condiciones_join]}
