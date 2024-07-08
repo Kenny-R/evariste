@@ -16,6 +16,9 @@ EMBEDDINGS_FOLDER = configuraciones['EMBEDDINGS_FOLDER']
 EMBEDDINGS_INDEX = configuraciones['EMBEDDINGS_INDEX']
 DEBUG = configuraciones['debug']
 
+# numero de ejecuciones
+global ejecuciones
+ejecuciones = 0
 
 # Configuración del modelo de embeding
 modelPath = EMBEDDINGS_MODEL
@@ -87,7 +90,8 @@ def crear_instrucciones(columnas: list[str]):
     return (lambda *args: texto)
 
 async def hacer_consulta(traduccion: str, columnas: list[str]):
-
+    global ejecuciones
+    
     columnas_traduccion = type(columnas)(columnas)
     print("############################################################")
     print(f"Procesando la pregunta:\n\t{traduccion}")
@@ -102,6 +106,7 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     )
 
     resultado_limpio = rag_chain.invoke(traduccion)
+    ejecuciones += 1
     print("Resultado sin procesar: ")
     print(resultado_limpio)
     print("############################################################")
@@ -151,6 +156,8 @@ def crear_ejemplos():
 
 async def hacer_pregunta(pregunta: str, contexto: str = "", instrucciones_extra:str = "", con_ejemplos: bool = False):
 
+    global ejecuciones
+    
     system_prompt=("You are a highly intelligent question answering bot. "
                     "You will answer concisely. "
                     "Use only the given context to answer the question. "
@@ -182,5 +189,6 @@ async def hacer_pregunta(pregunta: str, contexto: str = "", instrucciones_extra:
     )
 
     resultado_limpio = rag_chain.invoke(pregunta)
+    ejecuciones += 1
     print(f"Resultado: {resultado_limpio}\n")
     return resultado_limpio

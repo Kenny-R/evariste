@@ -7,7 +7,7 @@ import pandas as pd
 from time import time
 from parser_SQL import *
 from datetime import datetime
-from ejecutar_LLM import hacer_consulta
+import ejecutar_LLM
 from traduccion_sql_ln.funciones import *
 configuraciones = json.load(open("./configuraciones.json"))
 DEBUG = configuraciones['debug']
@@ -59,11 +59,13 @@ def prueba_singular():
     
     ejecutor = obtener_ejecutor(consulta_sql)
 
+    ejecutar_LLM.ejecuciones = 0
     ejecutor.ejecutar()
-    
+        
     # print(ejecutor)
     print("Resultado final: ")
     print(ejecutor.resultado)
+    print(f"Cantidad de ejecuciones: {ejecutar_LLM.ejecuciones}")
 
 def hacer_pruebas_en_lote():
     import pandas as pd
