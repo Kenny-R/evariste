@@ -620,7 +620,7 @@ def obtener_order_by(consulta_sql_ast: Expression) -> list[dict[str, str]]:
 
     return [{'tabla': i.this.table,
              'columna': i.this.this.this,
-             'tipo': "DESC" if (i.args.get('desc') or i.args.get('desc') is None) else "ASC"} for i in ordenes if i is not None]
+             'tipo': "DESC" if (i.args.get('desc') is not None) else "ASC"} for i in ordenes if i is not None]
 
 
 def obtener_limit(consulta_sql_ast: Expression) -> int:
