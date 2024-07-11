@@ -151,7 +151,7 @@ class miniconsulta_sql:
                         
                         columna.append(respuesta) 
                     if len(df_tuplas) != 0:
-                        df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+                        df_tuplas.insert(len(df_tuplas.columns), col_agg, columna, True)
         
                 consulta_procesar.resultado = df_tuplas
                 consulta_procesar.status = STATUS[2]
@@ -1078,7 +1078,7 @@ class miniconsulta_sql_anidadas:
                 
                 columna.append(respuesta)
             if len(df_tuplas) != 0:
-                df_tuplas.insert(df_tuplas.size[1], col_agg, columna, True)
+                df_tuplas.insert(len(df_tuplas.columns), col_agg, columna, True)
                 
         df_tuplas.columns = [f"{list(self.tablas_aliases.keys())[0]}.{columna}" for columna in df_tuplas.columns]
         

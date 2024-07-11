@@ -18,11 +18,11 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
-    prueba_singular()
+    # prueba_singular()
     # pruebas_operacion()
     # pruebas_join()
     # pruebas_anidamientos()
-    # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
     # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
 
@@ -150,7 +150,7 @@ def ejecucion_repetida_en_lote(archivo_xls):
         if fila['ejecutar'] == "No":
             continue
         print(f"Procesando el query {fila['query']}")
-        ejecucion_repetida(f'./resultados/ejecucion_queries_salida_md/gemma/ejecuciones_query_nro_{i+1}.log', fila['query'], 0, 20)
+        ejecucion_repetida(f'./resultados/ejecucion_queries_galois_salida_md/llama2-uncensored/ejecuciones_query_nro_{i+1}.log', fila['query'], 0, 20)
         
 def ejecucion_repetida(nombre, consulta_sql, inicio= 0, fin = 11):
     if DEBUG:
@@ -167,11 +167,13 @@ def ejecucion_repetida(nombre, consulta_sql, inicio= 0, fin = 11):
         logging.warning(f"@Ejecutando la iteracion {i+1}@\n")
         s = time()
         ejecutor = obtener_ejecutor(consulta_sql)
+        ejecutar_LLM.ejecuciones = 0
         ejecutor.ejecutar()
 
         logging.warning("//////////////////////////////////////////////////////////")
         logging.warning("resumen: {")
         logging.info(f"tiempo: {time() - s},")
+        logging.info(f"cantidad_peticiones_LLM: {ejecutar_LLM.ejecuciones},")
         logging.info(f"resultado: '''\n{ejecutor.resultado.to_markdown(index=False)}\n '''")
         logging.warning("}")
         logging.warning("//////////////////////////////////////////////////////////")
