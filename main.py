@@ -19,12 +19,12 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
-    prueba_singular()
+    # prueba_singular()
     # pruebas_operacion()
     # pruebas_join()
     # pruebas_anidamientos()
     # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
-    # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
 
 def prueba_LLM():
@@ -62,10 +62,11 @@ def prueba_singular():
 
     # consulta_sql = 'select t3.name from country as t1 join countrylanguage as t2 on  t1.country_name = t2.country_name join city as t3 on  t1.country_name = t3.country_name where t2.isofficial = "t" and t2.language = "chinese" and t1.continent = "asia"'
     # consulta_sql = 'SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Name = T2.Country_name WHERE T1.GovernmentForm = "Republic"'
-    # consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name NOT IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
     # consulta_sql = '''SELECT t1.area FROM country as t1 WHERE t1.countryName = "Spain";'''
-    consulta_sql = '''SELECT T1.Name , T1.District FROM city AS T1 JOIN countrylanguage AS T2 ON T1.CountryName = T2.CountryName WHERE T2.Language = "English" ORDER BY T1.District DESC LIMIT 10'''
-
+    # consulta_sql = '''SELECT T1.Name , T1.District FROM city AS T1 JOIN countrylanguage AS T2 ON T1.CountryName = T2.CountryName WHERE T2.Language = "English" ORDER BY T1.District DESC LIMIT 10'''
+    # consulta_sql = '''SELECT T1.state_name FROM state as T1 WHERE T1.state_name NOT IN ( SELECT T2.border FROM border_info as T2 WHERE T2.state_name = "texas" ) and T1.Country_Name = "United States"'''
+    consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
+    
     ejecutor = obtener_ejecutor(consulta_sql)
     
     ejecutor.ejecutar()
@@ -220,7 +221,7 @@ def ejecucion_repetida_nl_en_lote(archivo_xls):
             continue
         
         print(f"Procesando el query {fila['query']}")
-        ejecucion_repetida_nl(f'./resultados/ejecucion_preguntas_ln_salida_md/gemma/ejecuciones_preguntas_ln_nro_{i+1}.log',fila['ln'], fila['columnas'], 0, 20)
+        ejecucion_repetida_nl(f'./resultados/ejecucion_preguntas_ln_salida_md/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log',fila['ln'], fila['columnas'], 0, 20)
 
 if __name__ == "__main__":
     main()

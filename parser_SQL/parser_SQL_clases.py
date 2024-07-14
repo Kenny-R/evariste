@@ -995,14 +995,16 @@ class miniconsulta_sql_anidadas:
         self.resultado.columns = [f"{list(self.tablas_aliases.keys())[0]}.{columna}" for columna in self.resultado.columns]
         
         # Eliminamos las columnas repetidas
-        procesadas = []    
+        procesadas = []
+        hay_repetidas = False    
         for i, columna in enumerate(self.resultado.columns):
             if columna not in procesadas:
                 procesadas.append(columna)
             else:
+                hay_repetidas = True
                 self.resultado.columns = [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j < i] + ['BORRAR'] + [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j > i]
         
-        self.resultado.drop(columns='BORRAR', inplace=True)        
+        if hay_repetidas: self.resultado.drop(columns='BORRAR', inplace=True)        
         
         # Estamos suponiendo que si hay agregaciones en el select no hay proyecciones. Esto mientras no
         # exista la opcion de group by
