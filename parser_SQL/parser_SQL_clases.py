@@ -1082,16 +1082,20 @@ class miniconsulta_sql_anidadas:
                 
         df_tuplas.columns = [f"{list(self.tablas_aliases.keys())[0]}.{columna}" for columna in df_tuplas.columns]
         
+        self.resultado = df_tuplas
+        
         # Eliminamos las columnas repetidas
-        procesadas = []    
-        for i, columna in enumerate(df_tuplas.columns):
+        procesadas = []
+        hay_repetidas = False    
+        for i, columna in enumerate(self.resultado.columns):
             if columna not in procesadas:
                 procesadas.append(columna)
             else:
-                df_tuplas.columns = [df_tuplas.columns[j] for j in range(len(df_tuplas.columns)) if j < i] + ['BORRAR'] + [df_tuplas.columns[j] for j in range(len(df_tuplas.columns)) if j > i]
+                hay_repetidas = True
+                self.resultado.columns = [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j < i] + ['BORRAR'] + [self.resultado.columns[j] for j in range(len(self.resultado.columns)) if j > i]
         
-        df_tuplas.drop(columns='BORRAR', inplace=True)
-        self.resultado = df_tuplas
+        if hay_repetidas: self.resultado.drop(columns='BORRAR', inplace=True)
+
         
         if self.limite > 0:
             if DEBUG:
