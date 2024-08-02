@@ -155,7 +155,6 @@ class miniconsulta_sql:
     def __repr__(self) -> str:
         return self.imprimir_datos(0)
 
-
 class join_miniconsultas_sql:
     """
         Clase que controla todos los datos necesarios para realizar
@@ -405,7 +404,7 @@ class join_miniconsultas_sql:
             cantidad)
 
         # Quitamos todo lo que no sea un numero o un punto
-        cantidad_procesada = re.sub("[^\.0-9]", "", cantidad_procesada)
+        cantidad_procesada = re.sub("[^\-\.0-9]", "", cantidad_procesada)
 
         # pasamos a flotante
         try:
@@ -418,6 +417,8 @@ class join_miniconsultas_sql:
         return cantidad_final
 
     def _hacer_agregaciones(self):
+        from ejecutar_LLM import hacer_pregunta
+        
         
         if DEBUG: logging.info("Haciendo agregaciones\n")
         
@@ -438,15 +439,30 @@ class join_miniconsultas_sql:
                 continue
 
             try:
-                if DEBUG: logging.info(f"Datos antes de procesar las cantidades:\n{datos}")
+                if DEBUG: logging.info(f"Conseguimos los numeros en:\n{datos}")
+                nuevos_datos = []
+                for contenido in datos:
+                    nuevos_datos.append(asyncio.run(hacer_pregunta(f"Give me a number in format US present in the text '{contenido}'",
+                                                                   [],
+                                                                   "your response must be the shortest one\nOnly response with only a number in format US\ndon't Explain yourself\ndon't apologize if you can't response\nin case that you can find a number then response 'Unknow'\n")))
+                    if nuevos_datos[-1] == "Unknow":
+                        nuevos_datos.pop()
+                    
+                datos = pd.Series(nuevos_datos)
+                if DEBUG: logging.info(f"los numeros conseguidos son:\n{datos}")
+                
+                
+                if DEBUG: logging.info(f"Transformamos los strings a float:\n{datos}")
                 datos = datos.apply(self._procesar_cantidades)
-                if DEBUG: logging.info(f"Datos despues de procesar las cantidades:\n{datos}")
-            except:
+                if DEBUG: logging.info(f"Datos despues de Transformar los strings a float:\n{datos}")
+            except Exception as e:
                 if DEBUG:
                     logging.warning(f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos. Datos que se intentaron procesar: \n {datos.to_string()}')
                 
                 print(
                     f'Se omitio la argegación {agregacion.sql()} por que no se pudo procesar datos numericos')
+                
+                print(e)
                 continue
 
             if agregacion.key == "min":

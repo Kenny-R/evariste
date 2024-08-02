@@ -7,7 +7,7 @@ import pandas as pd
 from time import time
 from parser_SQL import *
 from datetime import datetime
-from ejecutar_LLM import hacer_consulta
+from ejecutar_LLM import hacer_consulta, hacer_pregunta
 import ejecutar_LLM
 from traduccion_sql_ln.funciones import *
 configuraciones = json.load(open("./configuraciones.json"))
@@ -24,7 +24,8 @@ def main():
     # pruebas_join()
     # pruebas_anidamientos()
     # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
-    ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    ejecucion_repetida_nl_mod_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
 
 def prueba_LLM():
@@ -65,8 +66,8 @@ def prueba_singular():
     # consulta_sql = '''SELECT t1.area FROM country as t1 WHERE t1.countryName = "Spain";'''
     # consulta_sql = '''SELECT T1.Name , T1.District FROM city AS T1 JOIN countrylanguage AS T2 ON T1.CountryName = T2.CountryName WHERE T2.Language = "English" ORDER BY T1.District DESC LIMIT 10'''
     # consulta_sql = '''SELECT T1.state_name FROM state as T1 WHERE T1.state_name NOT IN ( SELECT T2.border FROM border_info as T2 WHERE T2.state_name = "texas" ) and T1.Country_Name = "United States"'''
-    consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
-    
+    # consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
+    consulta_sql = '''SELECT MIN(T1.Population) FROM Country as T1 WHERE T1.Continent = "Europe"'''
     ejecutor = obtener_ejecutor(consulta_sql)
     
     ejecutor.ejecutar()
@@ -201,14 +202,24 @@ def ejecucion_repetida_nl(nombre, consulta_ln, columnas,inicio = 0, fin = 11, ti
     for i in range(inicio, fin):
         logging.warning(f"@Ejecutando la iteracion {i+1}@\n")
         s = time()
-        resultado = asyncio.run(hacer_consulta(consulta_ln, columnas))
-
-        logging.warning("//////////////////////////////////////////////////////////")
-        logging.warning("resumen: {")
-        logging.info(f"tiempo: {time() - s},")
-        logging.info(f"resultado: '''\n{resultado.to_markdown(index=False)}\n '''")
-        logging.warning("}")
-        logging.warning("//////////////////////////////////////////////////////////")
+        try:
+            resultado = asyncio.run(hacer_consulta(consulta_ln, columnas))
+            
+            logging.warning("//////////////////////////////////////////////////////////")
+            logging.warning("resumen: {")
+            logging.info(f"tiempo: {time() - s},")
+            logging.info(f"cantidad_peticiones_LLM: {ejecutar_LLM.ejecuciones},")
+            logging.info(f"resultado: '''\n{resultado.to_markdown(index=False)}\n '''")
+            logging.warning("}")
+            logging.warning("//////////////////////////////////////////////////////////")
+        except:
+            logging.warning("//////////////////////////////////////////////////////////")
+            logging.warning("resumen: {")
+            logging.info(f"tiempo: {time() - s},")
+            logging.info(f"cantidad_peticiones_LLM: {ejecutar_LLM.ejecuciones},")
+            logging.info(f"resultado: '''\n\n '''")
+            logging.warning("}")
+            logging.warning("//////////////////////////////////////////////////////////")
                 
         print(f"Termino la iteracion {i+1}")
     
@@ -221,7 +232,25 @@ def ejecucion_repetida_nl_en_lote(archivo_xls):
             continue
         
         print(f"Procesando el query {fila['query']}")
-        ejecucion_repetida_nl(f'./resultados/ejecucion_preguntas_ln_salida_md/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log',fila['ln'], fila['columnas'], 0, 20)
+        ejecucion_repetida_nl(f'./resultados/ejecucion_preguntas_ln_salida_md/gemma/ejecuciones_preguntas_ln_nro_{i+1}.log',fila['ln'], fila['columnas'], 0, 20)
+
+def ejecucion_repetida_nl_mod_en_lote(archivo_xls):
+    df = pd.read_excel(archivo_xls)
+    df['columnas'] = df['columnas'].apply(ast.literal_eval)
+    
+    for i, fila in df.iterrows():
+        if fila['ejecutar'] == "No":
+            continue
+        
+        print(f"Procesando el query {fila['query']}")
+        consulta = asyncio.run(hacer_pregunta(f"""Translate this SQL sentence to  a question in natural language. SQL Sentence: '{fila['query']}'""", 
+                                    [], 
+                                    "your response must be the shortest one\ndon't Explain yourself\ndon't apologize if you can't response\n"
+                                 ))
+        
+        ejecucion_repetida_nl(f'./resultados/ejecucion_pregunta_ln_mod_salida_df/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log', consulta, fila['columnas'], 0, 20)
+
+
 
 if __name__ == "__main__":
     main()

@@ -5,6 +5,7 @@ from langchain_community.llms import Ollama
 from traduccion_sql_ln import *
 from parser_SQL import *
 from embeddings import *
+import jellyfish
 import logging
 import mdpd
 import json
@@ -40,11 +41,12 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2-uncensored",
+    # model="llama2-uncensored",
     # model="llama3",
-    # model="gemma:7b",
+    model="gemma:7b",
     num_ctx=4096,
-    temperature = 0.3
+    temperature = 0.3,
+    timeout = 1000 * 60 * 5
 )
 
 # Configuraciones para hacer las preguntas
@@ -118,19 +120,46 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
         df = mdpd.from_md(resultado_limpio)
     except:
         df = pd.DataFrame()
-    
+    print(f"Columnas requeridas: {columnas}")
     if len(df) != 0:
-        if len(df.columns) > len(columnas):
-            # Hacer una busqueda de similitud por los nombres
-            if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene mas columnas de las que se le pidio\n")
-            df.columns = columnas + list(df.columns)[len(columnas):]
-        elif len(df.columns) < len(columnas):
-            # Hacer una busqueda de similitud por los nombres
-            if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene menos columnas de las que se le pidio\n")
-            df.columns = columnas[:len(df.columns)]
-        else:
-            df.columns = columnas
+        # if len(df.columns) > len(columnas):
+        #     # Hacer una busqueda de similitud por los nombres
+        #     if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene mas columnas de las que se le pidio\n")
+        #     df.columns = columnas + list(df.columns)[len(columnas):]
+        # elif len(df.columns) < len(columnas):
+        #     # Hacer una busqueda de similitud por los nombres
+        #     if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene menos columnas de las que se le pidio\n")
+        #     df.columns = columnas[:len(df.columns)]
+        # else:
+        #     df.columns = columnas
+        # La Key es el nombre espera el usuario, el value es el nombre que tiene el df devuelto
+        # por el LLM
+        asignaciones = {}
         
+        por_asignar = list(df.columns)
+        
+        while len(por_asignar) != 0:
+            columna_por_asignar = por_asignar.pop(0)
+            
+            posibles_asignaciones = sorted(columnas, key=lambda x: jellyfish.jaro_similarity(x, columna_por_asignar), reverse= True)
+            
+            for asignacion in posibles_asignaciones:
+                if asignaciones.get(asignacion) != None:
+                    columna_asignada = asignaciones.get(asignacion)
+                    
+                    if jellyfish.jaro_similarity(columna_por_asignar, asignacion) > jellyfish.jaro_similarity(columna_asignada, asignacion):
+                        por_asignar.append(columna_asignada)
+                        asignaciones[asignacion] = columna_por_asignar
+                else:
+                    asignaciones[asignacion] = columna_por_asignar
+        
+        nuevo_df = pd.DataFrame()
+        
+        for columna in asignaciones:
+            nuevo_df.insert(len(nuevo_df.columns), columna, df[asignaciones[columna]])
+        
+        df = nuevo_df
+                
         if DEBUG: logging.info(f"Resultado procesado:\n{df.to_string()}\n")
         
     else:
@@ -138,3 +167,58 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
         
     ejecuciones +=1
     return df
+
+def crear_ejemplos():
+    texto = "Examples: \n"
+    fewshot_chatgpt = [
+                        ['What is human life expectancy in the United States?', '78.'],
+                        ['Who was president of the United States in 1955?', 'Dwight D. Eisenhower.'],
+                        ['Which party was founded by Gramsci?', 'Comunista.'],
+                        ['What is the capital of France?', 'Paris.'],
+                        ['What is a continent starting with letter O?', 'Oceania.'],
+                        ['Where were the 1992 Olympics held?', 'Barcelona.'],
+                        ['How many squigs are in a bonk?', 'Unknown'],
+                        ['What is the population of Venezuela: 28,300,000']]
+    
+    texto += "\n".join([': '.join(shot) for shot in fewshot_chatgpt])
+    return (lambda *args: texto)
+
+async def hacer_pregunta(pregunta: str, contexto: str = "", instrucciones_extra:str = "", con_ejemplos: bool = False):
+
+    global ejecuciones
+    
+    system_prompt=("You are a highly intelligent question answering bot. "
+                    "You will answer concisely. "
+                    "Use only the given context to answer the question. "
+                    "Context: {context}"
+                    "\n{format_instructions}"
+                    "\n{examples}")
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("human", "{question}"),
+        ],
+    )
+    instrucciones = "Intructions: "
+    instrucciones += instrucciones_extra
+    datos = {"context": lambda x: format_docs(contexto), 
+            "question": RunnablePassthrough(),
+            "format_instructions": lambda *args: instrucciones} 
+    
+    datos['examples'] = lambda *args: ""
+    
+    if con_ejemplos:
+        datos['examples'] = crear_ejemplos()
+        
+    print(f"Procesando la pregunta:\n\t{pregunta}")
+    rag_chain = (
+        datos
+        | prompt
+        | ollama
+    )
+
+    resultado_limpio = rag_chain.invoke(pregunta)
+    ejecuciones += 1
+    print(f"Resultado: {resultado_limpio}\n")
+    return resultado_limpio
