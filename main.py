@@ -23,9 +23,9 @@ def main():
     # pruebas_operacion()
     # pruebas_join()
     # pruebas_anidamientos()
-    # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
     # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
-    ejecucion_repetida_nl_mod_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    # ejecucion_repetida_nl_mod_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
 
 def prueba_LLM():
@@ -248,7 +248,7 @@ def ejecucion_repetida_nl_mod_en_lote(archivo_xls):
                                     "your response must be the shortest one\ndon't Explain yourself\ndon't apologize if you can't response\n"
                                  ))
         
-        ejecucion_repetida_nl(f'./resultados/ejecucion_pregunta_ln_mod_salida_df/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log', consulta, fila['columnas'], 0, 20)
+        ejecucion_repetida_nl(f'./resultados/ejecucion_pregunta_ln_mod_salida_md/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log', consulta, fila['columnas'], 0, 20)
 
 
 
