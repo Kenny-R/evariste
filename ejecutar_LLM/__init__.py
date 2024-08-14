@@ -40,9 +40,9 @@ retriever = db.as_retriever()
 
 ollama = Ollama(
     base_url='http://localhost:3030',
-    model="llama2clear-uncensored",
+    # model="llama2-uncensored",
     # model="llama3",
-    # model="gemma:7b",
+    model="gemma:7b",
     num_ctx=4096,
     temperature = 0.3,
     timeout=60*5

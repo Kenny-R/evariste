@@ -150,7 +150,7 @@ def ejecucion_repetida_en_lote(archivo_xls):
         if fila['ejecutar'] == "No":
             continue
         print(f"Procesando el query {fila['query']}")
-        ejecucion_repetida(f'./resultados/ejecucion_queries_galois_salida_md/llama2-uncensored/ejecuciones_query_nro_{i+1}.log', fila['query'], 0, 5)
+        ejecucion_repetida(f'./resultados/ejecucion_queries_galois_salida_md/gemma/ejecuciones_query_nro_{i+1}.log', fila['query'], 0, 5)
         
 def ejecucion_repetida(nombre, consulta_sql, inicio= 0, fin = 11):
     if DEBUG:
