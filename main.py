@@ -19,11 +19,11 @@ def main():
     # prueba_parseo_singular()
     # hacer_pruebas_en_lote()
     # prueba_LLM()
-    # prueba_singular()
+    prueba_singular()
     # pruebas_operacion()
     # pruebas_join()
     # pruebas_anidamientos()
-    ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
+    # ejecucion_repetida_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
     # ejecucion_repetida_nl_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
     # ejecucion_repetida_nl_mod_en_lote('./ignorar/queries_ejecutar_modificados.xlsx')
 
@@ -67,14 +67,16 @@ def prueba_singular():
     # consulta_sql = '''SELECT T1.Name , T1.District FROM city AS T1 JOIN countrylanguage AS T2 ON T1.CountryName = T2.CountryName WHERE T2.Language = "English" ORDER BY T1.District DESC LIMIT 10'''
     # consulta_sql = '''SELECT T1.state_name FROM state as T1 WHERE T1.state_name NOT IN ( SELECT T2.border FROM border_info as T2 WHERE T2.state_name = "texas" ) and T1.Country_Name = "United States"'''
     # consulta_sql = '''SELECT T1.Capital FROM Country as T1 WHERE T1.Name IN ( SELECT T2.Country_Name FROM Country_Language as T2 WHERE T2.Name = "English" and T2.IsOfficialLanguage = 'T' )'''
-    consulta_sql = '''SELECT MIN(T1.Population) FROM Country as T1 WHERE T1.Continent = "Europe"'''
+    # consulta_sql = '''SELECT MIN(T1.Population) FROM Country as T1 WHERE T1.Continent = "Europe"'''
+    # consulta_sql = '''SELECT T2.Language FROM country AS T1 JOIN countrylanguage AS T2 ON T1.Name = T2.CountryName WHERE T1.HeadOfState = "Beatrix" AND T2.IsOfficial = "T"'''
+    consulta_sql = '''select t3.Name from Country as t1 join CountryLanguage as t2 on t1.Name = t2.CountryName join City as t3 on t1.Name = t3.CountryName where t2.IsOfficial = "T" and t2.Language = "chinese" and t1.Continent = "asia"'''
     ejecutor = obtener_ejecutor(consulta_sql)
     
     ejecutor.ejecutar()
 
     print("Resultado final: ")
     print(ejecutor.resultado)
-    print((f'Se hicieron {ejecutar_LLM.ejecuciones} peticiones al LLM'))
+    print(f'Se hicieron {ejecutar_LLM.ejecuciones} peticiones al LLM')
     
 def hacer_pruebas_en_lote():
     import pandas as pd
@@ -248,9 +250,7 @@ def ejecucion_repetida_nl_mod_en_lote(archivo_xls):
                                     "your response must be the shortest one\ndon't Explain yourself\ndon't apologize if you can't response\n"
                                  ))
         
-        ejecucion_repetida_nl(f'./resultados/ejecucion_pregunta_ln_mod_salida_md/llama2-uncensored/ejecuciones_preguntas_ln_nro_{i+1}.log', consulta, fila['columnas'], 0, 20)
-
-
+        ejecucion_repetida_nl(f'./resultados/ejecucion_pregunta_ln_mod_salida_md/gemma/ejecuciones_preguntas_ln_nro_{i+1}.log', consulta, fila['columnas'], 0, 20)
 
 if __name__ == "__main__":
     main()

@@ -5,6 +5,6 @@
     "debug": true,
     "EMBEDDINGS_MODEL": "thenlper/gte-large",
     "EMBEDDINGS_FOLDER": "emmbeddings_db",
-    "EMBEDDINGS_INDEX": "indices_paises_wikis"
+    "EMBEDDINGS_INDEX": "prueba_query_asia"
 
 }

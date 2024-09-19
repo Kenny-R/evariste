@@ -439,17 +439,18 @@ class join_miniconsultas_sql:
                 continue
 
             try:
-                if DEBUG: logging.info(f"Conseguimos los numeros en:\n{datos}")
-                nuevos_datos = []
-                for contenido in datos:
-                    nuevos_datos.append(asyncio.run(hacer_pregunta(f"Give me a number in format US present in the text '{contenido}'",
-                                                                   [],
-                                                                   "your response must be the shortest one\nOnly response with only a number in format US\ndon't Explain yourself\ndon't apologize if you can't response\nin case that you can find a number then response 'Unknow'\n")))
-                    if nuevos_datos[-1] == "Unknow":
-                        nuevos_datos.pop()
+                # if DEBUG: logging.info(f"Conseguimos los numeros en:\n{datos}")
+                
+                # nuevos_datos = []
+                # for contenido in datos:
+                #     nuevos_datos.append(asyncio.run(hacer_pregunta(f"Give me a number in format US present in the text '{contenido}'",
+                #                                                    [],
+                #                                                    "your response must be the shortest one\nOnly response with only a number in format US\ndon't Explain yourself\ndon't apologize if you can't response\nin case that you can find a number then response 'Unknow'\n")))
+                #     if nuevos_datos[-1] == "Unknow":
+                #         nuevos_datos.pop()
                     
-                datos = pd.Series(nuevos_datos)
-                if DEBUG: logging.info(f"los numeros conseguidos son:\n{datos}")
+                # datos = pd.Series(nuevos_datos)
+                # if DEBUG: logging.info(f"los numeros conseguidos son:\n{datos}")
                 
                 
                 if DEBUG: logging.info(f"Transformamos los strings a float:\n{datos}")

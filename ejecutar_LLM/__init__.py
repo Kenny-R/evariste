@@ -110,8 +110,7 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
     resultado_limpio = rag_chain.invoke(traduccion)
     print("Resultado sin procesar: ")
     print(resultado_limpio)
-    print("############################################################")
-    
+        
     if DEBUG:  
         logging.warning(f"Procesando la petición: {traduccion}\n")
         logging.info(f"Resultado sin procesar: \n{resultado_limpio}\n")
@@ -120,23 +119,17 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
         df = mdpd.from_md(resultado_limpio)
     except:
         df = pd.DataFrame()
+        
     print(f"Columnas requeridas: {columnas}")
+    
+    print("Resultado Antes de procesar: ")
+    print(df.to_markdown(index=False))
     if len(df) != 0:
-        # if len(df.columns) > len(columnas):
-        #     # Hacer una busqueda de similitud por los nombres
-        #     if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene mas columnas de las que se le pidio\n")
-        #     df.columns = columnas + list(df.columns)[len(columnas):]
-        # elif len(df.columns) < len(columnas):
-        #     # Hacer una busqueda de similitud por los nombres
-        #     if DEBUG: logging.info("La tabla que se obtuvo de la respuesta tiene menos columnas de las que se le pidio\n")
-        #     df.columns = columnas[:len(df.columns)]
-        # else:
-        #     df.columns = columnas
-        # La Key es el nombre espera el usuario, el value es el nombre que tiene el df devuelto
-        # por el LLM
         asignaciones = {}
         
         por_asignar = list(df.columns)
+                
+        por_asignar = [x for x in por_asignar if type(x) != int]
         
         while len(por_asignar) != 0:
             columna_por_asignar = por_asignar.pop(0)
@@ -155,11 +148,19 @@ async def hacer_consulta(traduccion: str, columnas: list[str]):
         
         nuevo_df = pd.DataFrame()
         
+        df  = df.loc[:,~df.columns.duplicated()]
+        
         for columna in asignaciones:
+        
             nuevo_df.insert(len(nuevo_df.columns), columna, df[asignaciones[columna]])
         
         df = nuevo_df
-                
+        
+        print("Resultado despues de procesar: ")
+        print(df.to_markdown(index=False))
+        print("############################################################")
+        
+        
         if DEBUG: logging.info(f"Resultado procesado:\n{df.to_string()}\n")
         
     else:
